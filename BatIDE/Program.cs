@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+using System;
 using System.Windows.Forms;
 
 namespace BatIDE
@@ -9,13 +6,15 @@ namespace BatIDE
     internal static class Program
     {
         /// <summary>
-        /// Главная точка входа для приложения.
+        /// Головна точка входу застосунку.
+        /// У .NET 8 WinForms ініціалізацію візуальних стилів
+        /// та DPI-режиму виконує згенерований метод
+        /// ApplicationConfiguration.Initialize().
         /// </summary>
         [STAThread]
         static void Main()
         {
-            Application.EnableVisualStyles();
-            Application.SetCompatibleTextRenderingDefault(false);
+            ApplicationConfiguration.Initialize();
             Application.Run(new Form1());
         }
     }
