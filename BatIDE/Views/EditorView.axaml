@@ -1,8 +1,8 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:avalonedit="https://github.com/avaloniaui/avaloniaedit"
-             x:Class="BatIDE.Views.EditorView"
-             x:DataType="BatIDE.Views.EditorView">
+             xmlns:models="clr-namespace:BatIDE.Models"
+             x:Class="BatIDE.Views.EditorView">
 
     <Grid RowDefinitions="*, 150" ColumnDefinitions="220, *, 200">
         <!-- Ліва панель: Document Outline -->
@@ -71,8 +71,7 @@
                          Foreground="#ddd"
                          BorderThickness="0">
                     <ListBox.ItemTemplate>
-                        <DataTemplate x:DataType="models:Diagnostic"
-                                      xmlns:models="using:BatIDE.Models">
+                        <DataTemplate x:DataType="models:Diagnostic">
                             <StackPanel Orientation="Horizontal" Spacing="10">
                                 <TextBlock Text="{Binding Code}"
                                            Foreground="#d16969"

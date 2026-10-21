@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
-    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>LOGO3.ico</ApplicationIcon>
     <AssemblyName>BatIDE</AssemblyName>
