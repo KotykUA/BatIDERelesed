@@ -38,7 +38,6 @@ public partial class EditorWindow : Window
 
     public async Task OpenFileInTabAsync(string path)
     {
-        // Якщо файл вже відкритий — перемикаємось на нього
         var existing = _views.FirstOrDefault(v => v.FilePath == path);
         if (existing != null)
         {
@@ -77,7 +76,46 @@ public partial class EditorWindow : Window
     private EditorView? GetActiveView() => (Tabs.SelectedItem as TabItem)?.Content as EditorView;
 
     private void OnSaveClick(object? sender, RoutedEventArgs e) => GetActiveView()?.Save();
-    private void OnFindClick(object? sender, RoutedEventArgs e) { /* TODO */ }
+    private void OnFindClick(object? sender, RoutedEventArgs e)
+    {
+        // --- Частина 5: Global Find Dialog ---
+        var window = new Window
+        {
+            Title = "Find in Tabs", Width = 400, Height = 150,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Background = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#0d0d0d"))
+        };
+        var stack = new StackPanel { Margin = new Avalonia.Thickness(20), Spacing = 10 };
+        var textBox = new TextBox { Watermark = "Search term..." };
+        var btn = new Button { Content = "Find", HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right, Width = 80 };
+        stack.Children.Add(textBox);
+        stack.Children.Add(btn);
+        window.Content = stack;
+
+        btn.Click += (_, _) =>
+        {
+            var term = textBox.Text;
+            if (string.IsNullOrEmpty(term)) return;
+            
+            var matches = 0;
+            foreach (var view in _views)
+            {
+                var editor = view.GetEditor();
+                if (editor.Document == null) continue;
+                var text = editor.Document.Text;
+                var index = 0;
+                while ((index = text.IndexOf(term, index, StringComparison.OrdinalIgnoreCase)) != -1)
+                {
+                    matches++;
+                    index += term.Length;
+                }
+            }
+            StatusText.Text = $"Found {matches} matches for '{term}' in {_views.Count} tabs.";
+            window.Close();
+        };
+        window.ShowDialog(this);
+    }
+
     private void OnCommentClick(object? sender, RoutedEventArgs e) { /* TODO */ }
     private void OnUndoClick(object? sender, RoutedEventArgs e) => GetActiveView()?.GetEditor().Undo();
     private void OnRedoClick(object? sender, RoutedEventArgs e) => GetActiveView()?.GetEditor().Redo();
@@ -91,7 +129,6 @@ public partial class EditorWindow : Window
     }
 
     private void OnStopClick(object? sender, RoutedEventArgs e) => _terminalService.Stop();
-
     private void OnClearOutputClick(object? sender, RoutedEventArgs e) => OutputText.Text = string.Empty;
 
     private async void OnFileMenuClick(object? sender, RoutedEventArgs e)

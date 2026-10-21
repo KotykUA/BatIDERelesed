@@ -12,6 +12,7 @@ using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using AvaloniaEdit;
 using AvaloniaEdit.CodeCompletion;
+using AvaloniaEdit.Folding;
 using AvaloniaEdit.Rendering;
 using AvaloniaEdit.Search;
 using BatIDE.Models;
@@ -30,6 +31,8 @@ public partial class EditorView : UserControl
     private readonly SearchPanel? _searchPanel;
     private readonly BatDocumentService _documentService;
     private readonly DiagnosticRenderer _diagnosticRenderer;
+    private readonly FoldingManager _foldingManager;
+    private readonly BatFoldingStrategy _foldingStrategy;
 
     private string _currentPath = string.Empty;
     private CompletionWindow? _completionWindow;
@@ -42,7 +45,6 @@ public partial class EditorView : UserControl
     public string DisplayName => string.IsNullOrEmpty(_currentPath) ? "Untitled" : Path.GetFileName(_currentPath);
 
     public event Action? TitleChanged;
-    public event Action? RunRequested;
     public event Action<string>? StatusChanged;
 
     public EditorView() : this(new SettingsService()) { }
@@ -56,9 +58,15 @@ public partial class EditorView : UserControl
         _documentService.DocumentParsed += OnDocumentParsed;
         Editor.TextChanged += (_, _) => _documentService.TriggerParse(Editor.Text ?? string.Empty);
 
+        // --- Частина 3: Diagnostics ---
         _diagnosticRenderer = new DiagnosticRenderer(Editor.TextArea.TextView);
         Editor.TextArea.TextView.BackgroundRenderers.Add(_diagnosticRenderer);
         ProblemsList.DoubleTapped += OnProblemDoubleTapped;
+
+        // --- Частина 5: Folding ---
+        _foldingManager = FoldingManager.Install(Editor.TextArea);
+        _foldingStrategy = new BatFoldingStrategy();
+        Editor.TextChanged += (_, _) => UpdateFoldings();
 
         Editor.TextArea.TextEntered += OnEditorTextEntered;
         Editor.TextArea.KeyDown += OnEditorKeyDown;
@@ -69,6 +77,12 @@ public partial class EditorView : UserControl
         foreach (var p in _settings.Settings.RecentProjects) AddProject(p);
     }
 
+    public void UpdateFoldings()
+    {
+        if (Editor.Document == null) return;
+        _foldingStrategy.UpdateFoldings(_foldingManager, Editor.Document);
+    }
+
     public async Task LoadFileAsync(string path)
     {
         try
@@ -77,6 +91,7 @@ public partial class EditorView : UserControl
             Editor.Text = File.Exists(path) ? await File.ReadAllTextAsync(path) : string.Empty;
             Editor.Document?.UndoStack.ClearAll();
             _documentService.TriggerParse(Editor.Text ?? string.Empty);
+            UpdateFoldings();
         }
         catch (Exception ex) { StatusChanged?.Invoke($"Failed to load: {ex.Message}"); }
 
@@ -104,17 +119,11 @@ public partial class EditorView : UserControl
     public async Task<bool> ConfirmCloseAsync()
     {
         if (!HasUnsavedChanges) return true;
-
         var window = TopLevel.GetTopLevel(this) as Window;
         if (window == null) return true;
 
         var result = SaveChoice.Cancel;
-        var dialog = new Window
-        {
-            Title = "Unsaved changes", Width = 420, Height = 170,
-            Background = new SolidColorBrush(Color.Parse("#0d0d0d")),
-            WindowStartupLocation = WindowStartupLocation.CenterOwner, CanResize = false
-        };
+        var dialog = new Window { Title = "Unsaved changes", Width = 420, Height = 170, Background = new SolidColorBrush(Color.Parse("#0d0d0d")), WindowStartupLocation = WindowStartupLocation.CenterOwner, CanResize = false };
         dialog.Content = new StackPanel
         {
             Margin = new Thickness(20), Spacing = 16,
@@ -123,15 +132,8 @@ public partial class EditorView : UserControl
                 new TextBlock { Text = $"Save changes to {DisplayName}?", Foreground = Brushes.White, TextWrapping = TextWrapping.Wrap },
                 new StackPanel
                 {
-                    Orientation = Avalonia.Layout.Orientation.Horizontal,
-                    HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
-                    Spacing = 8,
-                    Children =
-                    {
-                        MakeButton("Save", SaveChoice.Save),
-                        MakeButton("Discard", SaveChoice.Discard),
-                        MakeButton("Cancel", SaveChoice.Cancel)
-                    }
+                    Orientation = Avalonia.Layout.Orientation.Horizontal, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right, Spacing = 8,
+                    Children = { MakeButton("Save", SaveChoice.Save), MakeButton("Discard", SaveChoice.Discard), MakeButton("Cancel", SaveChoice.Cancel) }
                 }
             }
         };
@@ -195,7 +197,7 @@ public partial class EditorView : UserControl
         await LoadFileAsync(path);
     }
 
-    // ---------- Autocomplete ----------
+    // ---------- Autocomplete & Snippets ----------
 
     private static bool IsWordChar(char ch) =>
         char.IsLetterOrDigit(ch) || ch is '_' or '-' or '@' or '!' or '%' or '$' or '.';
@@ -219,6 +221,16 @@ public partial class EditorView : UserControl
 
     private void OnEditorKeyDown(object? sender, KeyEventArgs e)
     {
+        // --- Частина 5: Snippets (Tab) ---
+        if (e.Key == Key.Tab)
+        {
+            if (TryExpandSnippet())
+            {
+                e.Handled = true;
+                return;
+            }
+        }
+
         if (e.Key == Key.F12)
         {
             e.Handled = true;
@@ -238,6 +250,31 @@ public partial class EditorView : UserControl
                 ShowCompletionAtCaret();
                 break;
         }
+    }
+
+    private bool TryExpandSnippet()
+    {
+        var doc = Editor.Document;
+        if (doc == null || Editor.SelectionLength > 0) return false;
+
+        var offset = Editor.CaretOffset;
+        var wordStart = offset;
+        while (wordStart > 0 && IsWordChar(doc.GetCharAt(wordStart - 1))) wordStart--;
+
+        var prefix = doc.GetText(wordStart, offset - wordStart);
+        if (!SnippetManager.Snippets.TryGetValue(prefix, out var expansion))
+            return false;
+
+        doc.Replace(wordStart, offset - wordStart, expansion);
+
+        // Ставимо курсор всередині дужок (перший \n)
+        var firstNewLine = expansion.IndexOf('\n');
+        if (firstNewLine >= 0)
+            Editor.CaretOffset = wordStart + firstNewLine + 1;
+        else
+            Editor.CaretOffset = wordStart + expansion.Length;
+
+        return true;
     }
 
     private void ShowCompletionAtCaret()
@@ -314,7 +351,7 @@ public partial class EditorView : UserControl
         }
     }
 
-    // ---------- Go to Definition ----------
+    // ---------- Go to Definition & References ----------
 
     private (string Name, bool IsLabel, int StartOffset)? GetSymbolUnderCaret()
     {
