@@ -6,23 +6,16 @@ using AvaloniaEdit.Editing;
 
 namespace BatIDE.Services;
 
-public class BatCompletionData : ICompletionData
+public class BatCompletionData(string text) : ICompletionData
 {
-    private readonly string _text;
-
-    public BatCompletionData(string text)
-    {
-        _text = text;
-    }
-
     public IImage? Image => null;
-    public string Text => _text;
-    public object Content => _text;
-    public object Description => _text;
+    public string Text => text;
+    public object Content => text;
+    public object Description => text;
     public double Priority => 0;
 
     public void Complete(TextArea textArea, ISegment completionSegment, EventArgs insertionRequestEventArgs)
     {
-        textArea.Document.Replace(completionSegment, _text);
+        textArea.Document.Replace(completionSegment, text);
     }
 }

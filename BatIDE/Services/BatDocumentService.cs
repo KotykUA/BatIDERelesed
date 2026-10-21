@@ -6,27 +6,38 @@ using BatIDE.Models;
 
 namespace BatIDE.Services;
 
-public class BatDocumentService
+public sealed class BatDocumentService : IDisposable
 {
     private CancellationTokenSource? _cts;
+    private bool _disposed;
+
     public event Action<BatDocument>? DocumentParsed;
 
-    // Викликається при кожній зміні тексту в редакторі
     public void TriggerParse(string text)
     {
+        if (_disposed) return;
+
         _cts?.Cancel();
+        _cts?.Dispose();
         _cts = new CancellationTokenSource();
         var token = _cts.Token;
 
-        // Дебаунс 400мс — чекаємо, поки користувач перестане друкувати
         Task.Delay(400, token).ContinueWith(t =>
         {
             if (t.IsCanceled) return;
 
             var doc = BatParser.Parse(text);
-            
-            // Повертаємось в UI-потік для оновлення інтерфейсу
             Dispatcher.UIThread.Post(() => DocumentParsed?.Invoke(doc));
-        }, TaskScheduler.Default);
+        }, token, TaskContinuationOptions.None, TaskScheduler.Default);
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = null;
     }
 }

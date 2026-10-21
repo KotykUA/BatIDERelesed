@@ -4,36 +4,38 @@ using BatIDE.Models;
 
 namespace BatIDE.Services;
 
-public static class BatParser
+public static partial class BatParser
 {
-    // Регекси для швидкого виділення токенів
-    private static readonly Regex LabelRegex = new(@"^\s*:([a-zA-Z0-9_\-]+)", RegexOptions.Compiled);
-    private static readonly Regex VarUsageRegex = new(@"%([^%\s]+)%|!([^!\s]+)!", RegexOptions.Compiled);
-    private static readonly Regex SetCommandRegex = new(@"^\s*set\s+(?:/a\s+|/p\s+)?(?:\""([^=]+)=|([^=\s]+)=)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    [GeneratedRegex(@"^\s*:([a-zA-Z0-9_\-]+)", RegexOptions.Compiled)]
+    private static partial Regex LabelRegex();
+
+    [GeneratedRegex(@"%([^%\s]+)%|!([^!\s]+)!", RegexOptions.Compiled)]
+    private static partial Regex VarUsageRegex();
+
+    [GeneratedRegex(@"^\s*set\s+(?:/a\s+|/p\s+)?(?:\""([^=]+)=|([^=\s]+)=)", RegexOptions.Compiled | RegexOptions.IgnoreCase)]
+    private static partial Regex SetCommandRegex();
 
     public static BatDocument Parse(string text)
     {
         var doc = new BatDocument { Text = text };
         if (string.IsNullOrEmpty(text)) return doc;
 
-        var lines = text.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+        var lines = text.Split(["\r\n", "\r", "\n"], StringSplitOptions.None);
         var currentOffset = 0;
 
-        for (int i = 0; i < lines.Length; i++)
+        for (var i = 0; i < lines.Length; i++)
         {
             var line = lines[i];
             var trimmed = line.TrimStart();
 
-            // 1. Ігноруємо коментарі
-            if (trimmed.StartsWith("::", StringComparison.Ordinal) || 
+            if (trimmed.StartsWith("::", StringComparison.Ordinal) ||
                 trimmed.StartsWith("REM ", StringComparison.OrdinalIgnoreCase))
             {
-                currentOffset += line.Length + 1; // +1 для \n
+                currentOffset += line.Length + 1;
                 continue;
             }
 
-            // 2. Шукаємо мітки (Labels)
-            var labelMatch = LabelRegex.Match(line);
+            var labelMatch = LabelRegex().Match(line);
             if (labelMatch.Success)
             {
                 doc.Labels.Add(new BatLabel
@@ -45,9 +47,8 @@ public static class BatParser
             }
             else
             {
-                // 3. Шукаємо команди (перше слово в рядку)
                 var firstWord = trimmed.Split(' ', '\t')[0];
-                if (!string.IsNullOrEmpty(firstWord) && char.IsLetter(firstWord[0]) || firstWord.StartsWith('@'))
+                if (!string.IsNullOrEmpty(firstWord) && (char.IsLetter(firstWord[0]) || firstWord.StartsWith('@')))
                 {
                     doc.Commands.Add(new BatCommand
                     {
@@ -56,10 +57,9 @@ public static class BatParser
                         Arguments = trimmed.Length > firstWord.Length ? trimmed[firstWord.Length..].Trim() : string.Empty
                     });
 
-                    // 4. Шукаємо оголошення змінних (set)
                     if (firstWord.Equals("set", StringComparison.OrdinalIgnoreCase))
                     {
-                        var setMatch = SetCommandRegex.Match(line);
+                        var setMatch = SetCommandRegex().Match(line);
                         if (setMatch.Success)
                         {
                             var varName = setMatch.Groups[1].Success ? setMatch.Groups[1].Value : setMatch.Groups[2].Value;
@@ -73,13 +73,11 @@ public static class BatParser
                     }
                 }
 
-                // 5. Шукаємо використання змінних (%var% та !var!)
-                var varMatches = VarUsageRegex.Matches(line);
-                foreach (Match m in varMatches)
+                foreach (Match m in VarUsageRegex().Matches(line))
                 {
                     var isDelayed = m.Groups[2].Success;
                     var name = isDelayed ? m.Groups[2].Value : m.Groups[1].Value;
-                    
+
                     doc.Variables.Add(new BatVariable
                     {
                         Name = name,

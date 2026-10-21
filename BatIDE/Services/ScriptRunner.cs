@@ -4,6 +4,10 @@ using System.IO;
 
 namespace BatIDE.Services;
 
+/// <summary>
+/// Legacy one-shot script launcher (kept for compatibility).
+/// Prefer <see cref="TerminalService"/> which streams output in real time.
+/// </summary>
 public static class ScriptRunner
 {
     public static void Run(string path)
@@ -15,44 +19,32 @@ public static class ScriptRunner
 
         if (OperatingSystem.IsWindows())
         {
-            // UseShellExecute=true hands the file to the shell; Process is disposable.
             using var proc = Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
             return;
         }
 
-        // --- Linux / macOS ---
         if (ext is ".bat" or ".cmd")
         {
-            // Try auto-detecting Wine.
-            if (IsWineAvailable())
+            if (!IsWineAvailable())
             {
-                var psi = new ProcessStartInfo("wine")
-                {
-                    UseShellExecute = false
-                };
-                psi.ArgumentList.Add("cmd");
-                psi.ArgumentList.Add("/c");
-                psi.ArgumentList.Add(path);
-
-                using var proc = Process.Start(psi);
-                return;
+                throw new InvalidOperationException(
+                    $"{ext} files can only run on Windows.\n\n" +
+                    "Options:\n" +
+                    "  • Convert to .sh and run it here.\n" +
+                    "  • Install Wine (BatIDE will detect it automatically next time).\n" +
+                    "  • Execute on a Windows machine.");
             }
 
-            throw new InvalidOperationException(
-                $"{ext} files can only run on Windows.\n\n" +
-                "Options:\n" +
-                "  • Convert to .sh and run it here.\n" +
-                "  • Install Wine (BatIDE will detect it automatically next time).\n" +
-                "  • Execute on a Windows machine.");
+            var psi = new ProcessStartInfo("wine") { UseShellExecute = false };
+            psi.ArgumentList.Add("cmd");
+            psi.ArgumentList.Add("/c");
+            psi.ArgumentList.Add(path);
+
+            using var proc = Process.Start(psi);
+            return;
         }
 
-        // .sh or no extension — try to execute with /bin/sh.
-        // ArgumentList handles spaces/quotes in `path` safely.
-        var shellPsi = new ProcessStartInfo
-        {
-            FileName = "/bin/sh",
-            UseShellExecute = false
-        };
+        var shellPsi = new ProcessStartInfo { FileName = "/bin/sh", UseShellExecute = false };
         shellPsi.ArgumentList.Add(path);
 
         using var shellProc = Process.Start(shellPsi);
@@ -69,7 +61,6 @@ public static class ScriptRunner
                 RedirectStandardError = true,
                 CreateNoWindow = true
             });
-            
             proc?.WaitForExit(1000);
             return proc?.ExitCode == 0;
         }
@@ -81,7 +72,6 @@ public static class ScriptRunner
 
     public static void OpenUrl(string url)
     {
-        // Primary: let the OS resolve the URL (uses default browser).
         try
         {
             using var proc = Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
@@ -92,7 +82,6 @@ public static class ScriptRunner
             Debug.WriteLine($"[OpenUrl] UseShellExecute failed for '{url}': {ex}");
         }
 
-        // Fallback: explicit platform opener.
         try
         {
             var cmd = OperatingSystem.IsLinux() ? "xdg-open"

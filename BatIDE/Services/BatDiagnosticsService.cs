@@ -16,58 +16,44 @@ public static class BatDiagnosticsService
         var declaredVars = doc.Variables.Where(v => v.IsDeclaration).Select(v => v.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var usedLabels = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var cmd in doc.Commands)
+        foreach (var cmd in doc.Commands.Where(c => c.Name is "GOTO" or "CALL"))
         {
-            // 1. Перевірка goto / call
-            if (cmd.Name == "GOTO" || cmd.Name == "CALL")
+            var targetLabel = cmd.Arguments.Trim().TrimStart(':').Split(' ')[0];
+            if (string.IsNullOrEmpty(targetLabel) || targetLabel.Equals("eof", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            usedLabels.Add(targetLabel);
+            if (labels.Contains(targetLabel))
+                continue;
+
+            diagnostics.Add(new Diagnostic
             {
-                var targetLabel = cmd.Arguments.Trim().TrimStart(':').Split(' ')[0];
-                if (!string.IsNullOrEmpty(targetLabel) && !targetLabel.Equals("eof", StringComparison.OrdinalIgnoreCase))
-                {
-                    usedLabels.Add(targetLabel);
-                    if (!labels.Contains(targetLabel))
-                    {
-                        diagnostics.Add(new Diagnostic
-                        {
-                            Code = "BAT001",
-                            Message = $"Undefined label ':{targetLabel}'",
-                            Line = cmd.Line,
-                            Severity = DiagnosticSeverity.Error
-                        });
-                    }
-                }
-            }
+                Code = "BAT001",
+                Message = $"Undefined label ':{targetLabel}'",
+                Line = cmd.Line,
+                Severity = DiagnosticSeverity.Error
+            });
         }
 
-        // 2. Перевірка невикористаних лейблів
-        foreach (var label in doc.Labels)
-        {
-            if (!usedLabels.Contains(label.Name))
+        diagnostics.AddRange(doc.Labels
+            .Where(label => !usedLabels.Contains(label.Name))
+            .Select(label => new Diagnostic
             {
-                diagnostics.Add(new Diagnostic
-                {
-                    Code = "BAT004",
-                    Message = $"Unused label ':{label.Name}'",
-                    Line = label.Line,
-                    Severity = DiagnosticSeverity.Warning
-                });
-            }
-        }
+                Code = "BAT004",
+                Message = $"Unused label ':{label.Name}'",
+                Line = label.Line,
+                Severity = DiagnosticSeverity.Warning
+            }));
 
-        // 3. Перевірка змінних (використання до оголошення)
-        foreach (var variable in doc.Variables.Where(v => !v.IsDeclaration))
-        {
-            if (!declaredVars.Contains(variable.Name))
+        diagnostics.AddRange(doc.Variables
+            .Where(v => !v.IsDeclaration && !declaredVars.Contains(v.Name))
+            .Select(v => new Diagnostic
             {
-                diagnostics.Add(new Diagnostic
-                {
-                    Code = "BAT003",
-                    Message = $"Variable '{variable.Name}' is used but never declared via 'set'",
-                    Line = variable.Line,
-                    Severity = DiagnosticSeverity.Warning
-                });
-            }
-        }
+                Code = "BAT003",
+                Message = $"Variable '{v.Name}' is used but never declared via 'set'",
+                Line = v.Line,
+                Severity = DiagnosticSeverity.Warning
+            }));
 
         return diagnostics;
     }

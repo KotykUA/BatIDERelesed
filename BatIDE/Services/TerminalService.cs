@@ -6,20 +6,16 @@ using System.Threading.Tasks;
 
 namespace BatIDE.Services;
 
-/// <summary>
-/// Запускає скрипт і стрімить stdout/stderr у реальному часі.
-/// Підтримує Wine на Linux/macOS для .bat/.cmd.
-/// </summary>
 public class TerminalService
 {
     private Process? _currentProcess;
-    private StringBuilder _output = new();
+    private readonly StringBuilder _output = new();
 
     public event Action<string>? OnOutput;
     public event Action<int>? OnExit;
     public event Action? OnStarted;
 
-    public bool IsRunning => _currentProcess is { HasExited: false };
+    private bool IsRunning => _currentProcess is { HasExited: false };
 
     public async Task RunAsync(string path, string? workingDir = null)
     {
@@ -75,16 +71,12 @@ public class TerminalService
     {
         try
         {
-            if (_currentProcess is { HasExited: false })
-            {
-                _currentProcess.Kill(entireProcessTree: true);
-                OnOutput?.Invoke("\n[STOPPED] User terminated.\n");
-            }
+            if (_currentProcess is not { HasExited: false }) return;
+            _currentProcess.Kill(entireProcessTree: true);
+            OnOutput?.Invoke("\n[STOPPED] User terminated.\n");
         }
-        catch { /* ignore */ }
+        catch { /* best effort */ }
     }
-
-    public string GetOutput() => _output.ToString();
 
     private Process? CreateProcess(string path, string? workingDir)
     {
@@ -105,7 +97,6 @@ public class TerminalService
             return new Process { StartInfo = psi };
         }
 
-        // Linux / macOS
         if (ext is ".bat" or ".cmd")
         {
             if (IsWineAvailable())
@@ -128,7 +119,6 @@ public class TerminalService
             return null;
         }
 
-        // .sh or no extension
         var shellPsi = new ProcessStartInfo("/bin/sh")
         {
             UseShellExecute = false,

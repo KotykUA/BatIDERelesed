@@ -47,10 +47,12 @@ public partial class MainWindow : Window
         {
             var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
             {
-                Title = "Create script", SuggestedFileName = "script.bat",
+                Title = "Create script",
+                SuggestedFileName = "script.bat",
                 FileTypeChoices = [BatFilesType, ShFilesType]
             });
             if (file is null) return;
+
             var path = file.Path.LocalPath;
             await File.WriteAllTextAsync(path, "");
             RememberProject(path);
@@ -65,10 +67,12 @@ public partial class MainWindow : Window
         {
             var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
             {
-                Title = "Open script", AllowMultiple = false,
+                Title = "Open script",
+                AllowMultiple = false,
                 FileTypeFilter = [ScriptsType, AllFilesType]
             });
             if (files.Count == 0) return;
+
             var path = files[0].Path.LocalPath;
             RememberProject(path);
             await OpenEditorAsync(path);
@@ -80,11 +84,15 @@ public partial class MainWindow : Window
     {
         _settings.Settings.LastPath = path;
         _settings.Settings.LastName = Path.GetFileName(path);
+
         var recent = _settings.Settings.RecentProjects;
         recent.Remove(path);
         recent.Add(path);
+
         var limit = Math.Max(1, _settings.Settings.MaxRecentProjects);
-        while (recent.Count > limit) recent.RemoveAt(0);
+        while (recent.Count > limit)
+            recent.RemoveAt(0);
+
         _settings.Save();
     }
 
@@ -96,6 +104,7 @@ public partial class MainWindow : Window
             _editor.Activate();
             return;
         }
+
         _editor = new EditorWindow(_settings);
         _editor.Closed += (_, _) => _editor = null;
         _editor.Show();

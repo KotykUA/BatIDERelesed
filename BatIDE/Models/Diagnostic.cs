@@ -1,5 +1,3 @@
-using System;
-
 namespace BatIDE.Models;
 
 public enum DiagnosticSeverity
@@ -11,10 +9,10 @@ public enum DiagnosticSeverity
 
 public class Diagnostic
 {
-    public string Code { get; set; } = string.Empty; // Наприклад, "BAT001"
-    public string Message { get; set; } = string.Empty;
-    public int Line { get; set; } // 0-based
-    public int Column { get; set; } // 0-based
-    public int Length { get; set; }
-    public DiagnosticSeverity Severity { get; set; } = DiagnosticSeverity.Warning;
+    public string Code { get; init; } = string.Empty;
+    public string Message { get; init; } = string.Empty;
+    public int Line { get; init; }
+    public int Column { get; init; }
+    public int Length { get; init; }
+    public DiagnosticSeverity Severity { get; init; } = DiagnosticSeverity.Warning;
 }

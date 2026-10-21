@@ -4,30 +4,30 @@ namespace BatIDE.Models;
 
 public class BatDocument
 {
-    public string Text { get; set; } = string.Empty;
-    public List<BatLabel> Labels { get; } = new();
-    public List<BatVariable> Variables { get; } = new();
-    public List<BatCommand> Commands { get; } = new();
+    public string Text { get; init; } = string.Empty;
+    public List<BatLabel> Labels { get; init; } = [];
+    public List<BatVariable> Variables { get; init; } = [];
+    public List<BatCommand> Commands { get; init; } = [];
 }
 
 public class BatLabel
 {
-    public string Name { get; set; } = string.Empty;
-    public int Line { get; set; }
-    public int Offset { get; set; }
+    public string Name { get; init; } = string.Empty;
+    public int Line { get; init; }
+    public int Offset { get; init; }
 }
 
 public class BatVariable
 {
-    public string Name { get; set; } = string.Empty;
-    public int Line { get; set; }
-    public bool IsDelayed { get; set; } // !var! замість %var%
-    public bool IsDeclaration { get; set; } // true, якщо це set var=...
+    public string Name { get; init; } = string.Empty;
+    public int Line { get; init; }
+    public bool IsDelayed { get; init; }
+    public bool IsDeclaration { get; init; }
 }
 
 public class BatCommand
 {
-    public string Name { get; set; } = string.Empty;
-    public int Line { get; set; }
-    public string Arguments { get; set; } = string.Empty;
+    public string Name { get; init; } = string.Empty;
+    public int Line { get; init; }
+    public string Arguments { get; init; } = string.Empty;
 }

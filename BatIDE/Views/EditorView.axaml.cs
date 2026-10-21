@@ -9,7 +9,6 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
-using Avalonia.Platform.Storage;
 using AvaloniaEdit;
 using AvaloniaEdit.CodeCompletion;
 using AvaloniaEdit.Document;
@@ -23,13 +22,8 @@ namespace BatIDE.Views;
 
 public partial class EditorView : UserControl
 {
-    private static readonly FilePickerFileType BatFilesType = new("BAT files") { Patterns = ["*.bat"] };
-    private static readonly FilePickerFileType ShFilesType = new("Shell scripts") { Patterns = ["*.sh"] };
-    private static readonly FilePickerFileType ScriptsType = new("Scripts") { Patterns = ["*.bat", "*.cmd", "*.sh"] };
-
     private readonly SettingsService _settings;
     private readonly List<string> _projectPaths = [];
-    private readonly SearchPanel? _searchPanel;
     private readonly BatDocumentService _documentService;
     private readonly DiagnosticRenderer _diagnosticRenderer;
     private readonly FoldingManager _foldingManager;
@@ -59,12 +53,10 @@ public partial class EditorView : UserControl
         _documentService.DocumentParsed += OnDocumentParsed;
         Editor.TextChanged += (_, _) => _documentService.TriggerParse(Editor.Text ?? string.Empty);
 
-        // Diagnostics
         _diagnosticRenderer = new DiagnosticRenderer(Editor.TextArea.TextView);
         Editor.TextArea.TextView.BackgroundRenderers.Add(_diagnosticRenderer);
         ProblemsList.DoubleTapped += OnProblemDoubleTapped;
 
-        // Folding
         _foldingManager = FoldingManager.Install(Editor.TextArea);
         _foldingStrategy = new BatFoldingStrategy();
         Editor.TextChanged += (_, _) => UpdateFoldings();
@@ -72,7 +64,7 @@ public partial class EditorView : UserControl
         Editor.TextArea.TextEntered += OnEditorTextEntered;
         Editor.TextArea.KeyDown += OnEditorKeyDown;
         Editor.SyntaxHighlighting = BatSyntaxHighlighting.Load();
-        _searchPanel = SearchPanel.Install(Editor);
+        SearchPanel.Install(Editor);
 
         ProjectsList.SelectionChanged += OnProjectSelected;
         foreach (var p in _settings.Settings.RecentProjects) AddProject(p);
@@ -126,14 +118,17 @@ public partial class EditorView : UserControl
         var result = SaveChoice.Cancel;
         var dialog = new Window
         {
-            Title = "Unsaved changes", Width = 420, Height = 170,
+            Title = "Unsaved changes",
+            Width = 420,
+            Height = 170,
             Background = new SolidColorBrush(Color.Parse("#0d0d0d")),
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false
         };
         dialog.Content = new StackPanel
         {
-            Margin = new Thickness(20), Spacing = 16,
+            Margin = new Thickness(20),
+            Spacing = 16,
             Children =
             {
                 new TextBlock { Text = $"Save changes to {DisplayName}?", Foreground = Brushes.White, TextWrapping = TextWrapping.Wrap },
@@ -179,39 +174,48 @@ public partial class EditorView : UserControl
         return text.Replace("\r\n", "\n").Replace("\r", "\n").Replace("\n", ending);
     }
 
-    // ---------- Project list ----------
-
     private void AddProject(string path)
     {
         if (_projectPaths.Contains(path)) return;
         _projectPaths.Add(path);
+
         var limit = Math.Max(1, _settings.Settings.MaxRecentProjects);
-        while (_projectPaths.Count > limit) _projectPaths.RemoveAt(0);
+        while (_projectPaths.Count > limit)
+            _projectPaths.RemoveAt(0);
+
         ProjectsList.ItemsSource = null;
         ProjectsList.ItemsSource = _projectPaths.Select(Path.GetFileName).ToList();
     }
 
     private async void OnProjectSelected(object? sender, SelectionChangedEventArgs e)
     {
-        var index = ProjectsList.SelectedIndex;
-        if (index < 0 || index >= _projectPaths.Count) return;
-        var path = _projectPaths[index];
-        if (path == _currentPath) return;
-        if (!await ConfirmCloseAsync())
+        try
         {
-            var revertIndex = _projectPaths.IndexOf(_currentPath);
-            if (revertIndex >= 0)
-            {
-                ProjectsList.SelectionChanged -= OnProjectSelected;
-                ProjectsList.SelectedIndex = revertIndex;
-                ProjectsList.SelectionChanged += OnProjectSelected;
-            }
-            return;
-        }
-        await LoadFileAsync(path);
-    }
+            var index = ProjectsList.SelectedIndex;
+            if (index < 0 || index >= _projectPaths.Count) return;
 
-    // ---------- Autocomplete & Snippets ----------
+            var path = _projectPaths[index];
+            if (path == _currentPath) return;
+
+            if (!await ConfirmCloseAsync())
+            {
+                var revertIndex = _projectPaths.IndexOf(_currentPath);
+                if (revertIndex >= 0)
+                {
+                    ProjectsList.SelectionChanged -= OnProjectSelected;
+                    ProjectsList.SelectedIndex = revertIndex;
+                    ProjectsList.SelectionChanged += OnProjectSelected;
+                }
+                return;
+            }
+
+            await LoadFileAsync(path);
+        }
+        catch (Exception ex)
+        {
+            StatusChanged?.Invoke($"Switch project failed: {ex.Message}");
+        }
+    }
 
     private static bool IsWordChar(char ch) =>
         char.IsLetterOrDigit(ch) || ch is '_' or '-' or '@' or '!' or '%' or '$' or '.';
@@ -220,15 +224,23 @@ public partial class EditorView : UserControl
     {
         if (e.Text is null || e.Text.Length == 0 || _completionWindow != null) return;
         if (!IsWordChar(e.Text[0])) return;
+
         var offset = Editor.CaretOffset;
         if (offset <= 0) return;
+
         var doc = Editor.Document;
         if (doc is null) return;
+
         var wordStart = offset - 1;
         while (wordStart > 0 && IsWordChar(doc.GetCharAt(wordStart - 1))) wordStart--;
+
         var prefix = doc.GetText(wordStart, offset - wordStart);
         if (prefix.Length < 1) return;
-        var matches = BatCommands.All.Where(cmd => cmd.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)).ToList();
+
+        var matches = BatCommands.All
+            .Where(cmd => cmd.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
         if (matches.Count == 0) return;
         ShowCompletionWindow(wordStart, matches);
     }
@@ -248,7 +260,9 @@ public partial class EditorView : UserControl
             else GoToDefinition();
             return;
         }
+
         if (!e.KeyModifiers.HasFlag(KeyModifiers.Control)) return;
+
         switch (e.Key)
         {
             case Key.S:
@@ -278,10 +292,9 @@ public partial class EditorView : UserControl
         doc.Replace(wordStart, offset - wordStart, expansion);
 
         var firstNewLine = expansion.IndexOf('\n');
-        if (firstNewLine >= 0)
-            Editor.CaretOffset = wordStart + firstNewLine + 1;
-        else
-            Editor.CaretOffset = wordStart + expansion.Length;
+        Editor.CaretOffset = firstNewLine >= 0
+            ? wordStart + firstNewLine + 1
+            : wordStart + expansion.Length;
 
         return true;
     }
@@ -290,8 +303,10 @@ public partial class EditorView : UserControl
     {
         _completionWindow?.Close();
         _completionWindow = null;
+
         var doc = Editor.Document;
         if (doc is null) return;
+
         var wordStart = Editor.CaretOffset;
         while (wordStart > 0 && IsWordChar(doc.GetCharAt(wordStart - 1))) wordStart--;
         ShowCompletionWindow(wordStart, BatCommands.All);
@@ -300,28 +315,36 @@ public partial class EditorView : UserControl
     private void ShowCompletionWindow(int startOffset, IEnumerable<string> items)
     {
         var window = new CompletionWindow(Editor.TextArea) { StartOffset = startOffset };
-        foreach (var item in items) window.CompletionList.CompletionData.Add(new BatCompletionData(item));
-        window.Closed += (_, _) => { if (ReferenceEquals(_completionWindow, window)) _completionWindow = null; };
+        foreach (var item in items)
+            window.CompletionList.CompletionData.Add(new BatCompletionData(item));
+
+        window.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_completionWindow, window))
+                _completionWindow = null;
+        };
+
         _completionWindow = window;
         window.Show();
     }
-
-    // ---------- Document Parsing ----------
 
     private void OnDocumentParsed(BatDocument doc)
     {
         _currentDocument = doc;
         UpdateDocumentOutline(doc);
+
         var diagnostics = BatDiagnosticsService.Analyze(doc);
         ProblemsList.ItemsSource = diagnostics;
         _diagnosticRenderer.SetDiagnostics(diagnostics);
         Editor.TextArea.TextView.InvalidateLayer(KnownLayer.Background);
+
         StatusChanged?.Invoke($"Parsed: {doc.Labels.Count} labels | {diagnostics.Count} problems");
     }
 
     private void UpdateDocumentOutline(BatDocument doc)
     {
         var root = new TreeViewItem { Header = "📄 Document Outline", IsExpanded = true };
+
         var labelsNode = new TreeViewItem { Header = "🏷️ Labels", IsExpanded = true };
         foreach (var label in doc.Labels)
         {
@@ -329,14 +352,24 @@ public partial class EditorView : UserControl
             item.DoubleTapped += OnOutlineItemDoubleTapped;
             labelsNode.Items.Add(item);
         }
+
         var varsNode = new TreeViewItem { Header = "📦 Variables", IsExpanded = true };
-        var uniqueVars = doc.Variables.Where(v => v.IsDeclaration).GroupBy(v => v.Name).Select(g => g.First());
+        var uniqueVars = doc.Variables
+            .Where(v => v.IsDeclaration)
+            .GroupBy(v => v.Name)
+            .Select(g => g.First());
+
         foreach (var v in uniqueVars)
         {
-            var item = new TreeViewItem { Header = v.Name, Tag = Editor.Document?.GetLineByNumber(v.Line + 1)?.Offset ?? 0 };
+            var item = new TreeViewItem
+            {
+                Header = v.Name,
+                Tag = Editor.Document?.GetLineByNumber(v.Line + 1)?.Offset ?? 0
+            };
             item.DoubleTapped += OnOutlineItemDoubleTapped;
             varsNode.Items.Add(item);
         }
+
         root.Items.Add(labelsNode);
         root.Items.Add(varsNode);
         DocumentOutline.ItemsSource = new[] { root };
@@ -356,51 +389,66 @@ public partial class EditorView : UserControl
         if (ProblemsList.SelectedItem is Diagnostic diag)
         {
             var line = Editor.Document?.GetLineByNumber(diag.Line + 1);
-            if (line != null) { Editor.CaretOffset = line.Offset; Editor.Focus(); }
+            if (line != null)
+            {
+                Editor.CaretOffset = line.Offset;
+                Editor.Focus();
+            }
         }
     }
-
-    // ---------- Go to Definition & References ----------
 
     private (string Name, bool IsLabel, int StartOffset)? GetSymbolUnderCaret()
     {
         var doc = Editor.Document;
         if (doc == null) return null;
+
         var offset = Editor.CaretOffset;
         var line = doc.GetLineByOffset(offset);
         var text = doc.GetText(line);
+
         var labelMatch = Regex.Match(text, @"(?:goto|call)\s+:?([a-zA-Z0-9_\-]+)", RegexOptions.IgnoreCase);
         if (labelMatch.Success)
         {
             var name = labelMatch.Groups[1].Value;
             var start = line.Offset + labelMatch.Groups[1].Index;
-            if (offset >= start - 1 && offset <= start + name.Length + 1) return (name, true, start);
+            if (offset >= start - 1 && offset <= start + name.Length + 1)
+                return (name, true, start);
         }
+
         var varMatch = Regex.Match(text, @"[%!]([^%!\s]+)[%!]");
         if (varMatch.Success)
         {
             var name = varMatch.Groups[1].Value;
             var start = line.Offset + varMatch.Groups[1].Index;
-            if (offset >= start - 1 && offset <= start + name.Length + 1) return (name, false, start);
+            if (offset >= start - 1 && offset <= start + name.Length + 1)
+                return (name, false, start);
         }
+
         return null;
     }
 
     private void GoToDefinition()
     {
         if (_currentDocument == null) return;
+
         var symbol = GetSymbolUnderCaret();
         if (symbol == null) { StatusChanged?.Invoke("No symbol under cursor."); return; }
+
         var (name, isLabel, _) = symbol.Value;
+
         if (isLabel)
         {
-            var target = _currentDocument.Labels.FirstOrDefault(l => l.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+            var target = _currentDocument.Labels
+                .FirstOrDefault(l => l.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+
             if (target != null) { Editor.CaretOffset = target.Offset; StatusChanged?.Invoke($"Jumped to :{name}"); }
             else StatusChanged?.Invoke($"Label :{name} not found.");
         }
         else
         {
-            var target = _currentDocument.Variables.FirstOrDefault(v => v.IsDeclaration && v.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+            var target = _currentDocument.Variables
+                .FirstOrDefault(v => v.IsDeclaration && v.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+
             if (target != null)
             {
                 Editor.CaretOffset = Editor.Document?.GetLineByNumber(target.Line + 1)?.Offset ?? 0;
@@ -413,32 +461,39 @@ public partial class EditorView : UserControl
     private void FindReferences()
     {
         if (_currentDocument == null) return;
+
         var symbol = GetSymbolUnderCaret();
         if (symbol == null) return;
+
         var (name, isLabel, _) = symbol.Value;
         var count = isLabel
-            ? _currentDocument.Commands.Count(c => (c.Name == "GOTO" || c.Name == "CALL") && c.Arguments.Contains(name, StringComparison.OrdinalIgnoreCase))
-            : _currentDocument.Variables.Count(v => !v.IsDeclaration && v.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+            ? _currentDocument.Commands.Count(c =>
+                (c.Name == "GOTO" || c.Name == "CALL") &&
+                c.Arguments.Contains(name, StringComparison.OrdinalIgnoreCase))
+            : _currentDocument.Variables.Count(v =>
+                !v.IsDeclaration && v.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+
         StatusChanged?.Invoke($"Found {count} references to {(isLabel ? "label" : "variable")} {name}.");
     }
 }
 
 // ---------- Squiggly Renderer ----------
 
-public class DiagnosticRenderer : IBackgroundRenderer
+public sealed class DiagnosticRenderer(TextView textView) : IBackgroundRenderer
 {
-    private readonly TextView _textView;
     private List<Diagnostic> _diagnostics = [];
 
-    public DiagnosticRenderer(TextView textView) => _textView = textView;
     public KnownLayer Layer => KnownLayer.Background;
+
     public void SetDiagnostics(List<Diagnostic> diagnostics) => _diagnostics = diagnostics;
 
-    public void Draw(TextView textView, DrawingContext drawingContext)
+    public void Draw(TextView view, DrawingContext drawingContext)
     {
-        if (_diagnostics.Count == 0 || !textView.VisualLinesValid) return;
+        if (_diagnostics.Count == 0 || !view.VisualLinesValid) return;
+
         var pen = new Pen(new SolidColorBrush(Color.Parse("#d16969")), 1.5);
         var geometry = new StreamGeometry();
+
         using (var context = geometry.Open())
         {
             foreach (var diag in _diagnostics)
@@ -446,15 +501,13 @@ public class DiagnosticRenderer : IBackgroundRenderer
                 var line = textView.Document.GetLineByNumber(diag.Line + 1);
                 if (line == null) continue;
 
-                // Замість SimpleSegment (який більше не існує в AvaloniaEdit 11.3)
-                // використовуємо TextSegment напряму.
                 var segment = new TextSegment
                 {
                     StartOffset = line.Offset,
                     Length = line.Length
                 };
 
-                foreach (var rect in BackgroundGeometryBuilder.GetRectsForSegment(textView, segment))
+                foreach (var rect in BackgroundGeometryBuilder.GetRectsForSegment(view, segment))
                 {
                     context.BeginFigure(rect.BottomLeft, false);
                     for (double x = rect.BottomLeft.X; x < rect.BottomRight.X; x += 4)
@@ -462,6 +515,7 @@ public class DiagnosticRenderer : IBackgroundRenderer
                 }
             }
         }
+
         drawingContext.DrawGeometry(null, pen, geometry);
     }
 }
