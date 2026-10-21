@@ -1,0 +1,42 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="BatIDE.Views.MainWindow"
+        Title="BatIDE"
+        Width="380" Height="440"
+        Background="#0d0d0d"
+        Foreground="White"
+        WindowStartupLocation="CenterScreen"
+        CanResize="False">
+
+    <Window.Styles>
+        <Style Selector="Button.primary">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Foreground" Value="#5cd65c" />
+            <Setter Property="FontSize" Value="30" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="Padding" Value="40,14" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#1b3a1b" />
+            <Setter Property="Foreground" Value="#aaffaa" />
+        </Style>
+        <Style Selector="Button.primary:pressed /template/ ContentPresenter">
+            <Setter Property="Background" Value="#0f1f0f" />
+        </Style>
+    </Window.Styles>
+
+    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="18">
+        <TextBlock Text="BatIDE"
+                   FontSize="22"
+                   FontWeight="Bold"
+                   Foreground="#444"
+                   HorizontalAlignment="Center"
+                   Margin="0,0,0,24" />
+
+        <Button Classes="primary" Content="Create" Click="OnCreateClick" />
+        <Button Classes="primary" Content="Open"   Click="OnOpenClick" />
+    </StackPanel>
+</Window>

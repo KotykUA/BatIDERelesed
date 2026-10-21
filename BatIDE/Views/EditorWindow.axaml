@@ -1,0 +1,83 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:avalonedit="https://github.com/avaloniaui/avaloniaedit"
+        x:Class="BatIDE.Views.EditorWindow"
+        Title="BatIDE — Editor"
+        Width="1200" Height="720"
+        Background="#0d0d0d"
+        Foreground="White"
+        WindowStartupLocation="CenterScreen">
+
+    <Window.Styles>
+        <Style Selector="Button.toolbar">
+            <Setter Property="Background" Value="#1a1a1a" />
+            <Setter Property="Foreground" Value="#c8c8c8" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="#2a2a2a" />
+            <Setter Property="Padding" Value="12,6" />
+            <Setter Property="Margin" Value="2,0" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style Selector="Button.toolbar:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#2a2a2a" />
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+    </Window.Styles>
+
+    <DockPanel>
+        <Border DockPanel.Dock="Bottom" Background="#111111" Padding="6,4">
+            <DockPanel>
+                <TextBlock x:Name="StatusText"
+                           DockPanel.Dock="Right"
+                           Foreground="#666"
+                           FontSize="11"
+                           VerticalAlignment="Center"
+                           Margin="12,0,0,0" />
+                <WrapPanel Orientation="Horizontal">
+                    <Button Classes="toolbar" Content="Save"         Click="OnSaveClick" />
+                    <Button Classes="toolbar" Content="Run"          Click="OnRunClick" />
+                    <Button Classes="toolbar" Content="File"         Click="OnFileMenuClick" />
+                    <Button Classes="toolbar" Content="Settings"     Click="OnSettingsClick" />
+                    <Button Classes="toolbar" Content="Documentation" Click="OnDocsClick" />
+                    <Button Classes="toolbar" Content="Find"         Click="OnFindClick" />
+                    <Button Classes="toolbar" Content="Comment"      Click="OnCommentClick" />
+                    <Button Classes="toolbar" Content="Undo"         Click="OnUndoClick" />
+                    <Button Classes="toolbar" Content="Redo"         Click="OnRedoClick" />
+                </WrapPanel>
+            </DockPanel>
+        </Border>
+
+        <Border DockPanel.Dock="Top" Background="#111111" Padding="10,6">
+            <TextBlock x:Name="ProjectInfoText" Foreground="#999" FontSize="12" />
+        </Border>
+
+        <Grid ColumnDefinitions="*,240">
+            <Border Grid.Column="0" Background="Black">
+                <avalonedit:TextEditor x:Name="Editor"
+                                       Background="Transparent"
+                                       Foreground="#e0e0e0"
+                                       ShowLineNumbers="True"
+                                       FontFamily="Cascadia Code, Consolas, Menlo, monospace"
+                                       FontSize="14"
+                                       HorizontalScrollBarVisibility="Auto"
+                                       VerticalScrollBarVisibility="Auto" />
+            </Border>
+
+            <Border Grid.Column="1" Background="#0a0a0a" BorderBrush="#222" BorderThickness="1,0,0,0">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top"
+                               Text="Projects"
+                               Foreground="#666"
+                               FontSize="11"
+                               Margin="10,8,10,4" />
+                    <ListBox x:Name="ProjectsList"
+                             Background="Transparent"
+                             Foreground="#ddd"
+                             BorderThickness="0" />
+                </DockPanel>
+            </Border>
+        </Grid>
+
+    </DockPanel>
+</Window>
