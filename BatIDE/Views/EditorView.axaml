@@ -1,0 +1,50 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:avalonedit="https://github.com/avaloniaui/avaloniaedit"
+             x:Class="BatIDE.Views.EditorView">
+    <Grid RowDefinitions="*, 150" ColumnDefinitions="220, *, 200">
+        <!-- Outline -->
+        <Border Grid.Row="0" Grid.Column="0" Background="#0a0a0a" BorderBrush="#222" BorderThickness="0,0,1,0">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Top" Text="Outline" Foreground="#666" FontSize="11" Margin="10,8,10,4" />
+                <TreeView x:Name="DocumentOutline" Background="Transparent" Foreground="#ddd" BorderThickness="0" />
+            </DockPanel>
+        </Border>
+
+        <!-- Editor -->
+        <Border Grid.Row="0" Grid.Column="1" Background="Black">
+            <avalonedit:TextEditor x:Name="Editor"
+                                   Background="Transparent" Foreground="#e0e0e0"
+                                   ShowLineNumbers="True"
+                                   FontFamily="Cascadia Code, Consolas, Menlo, monospace"
+                                   FontSize="14"
+                                   HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" />
+        </Border>
+
+        <!-- Projects -->
+        <Border Grid.Row="0" Grid.Column="2" Background="#0a0a0a" BorderBrush="#222" BorderThickness="1,0,0,0">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Top" Text="Projects" Foreground="#666" FontSize="11" Margin="10,8,10,4" />
+                <ListBox x:Name="ProjectsList" Background="Transparent" Foreground="#ddd" BorderThickness="0" />
+            </DockPanel>
+        </Border>
+
+        <!-- Problems -->
+        <Border Grid.Row="1" Grid.ColumnSpan="3" Background="#111" BorderBrush="#333" BorderThickness="0,1,0,0">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Top" Text="Problems" Foreground="#888" FontSize="11" Margin="10,4,10,4" />
+                <ListBox x:Name="ProblemsList" Background="Transparent" Foreground="#ddd" BorderThickness="0">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <TextBlock Text="{Binding Code}" Foreground="#d16969" FontWeight="Bold" />
+                                <TextBlock Text="{Binding Message}" Foreground="#ccc" />
+                                <TextBlock Text="{Binding Line, StringFormat='Line {0}'}" Foreground="#666" FontSize="11" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+        </Border>
+    </Grid>
+</UserControl>

@@ -1,100 +1,61 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:avalonedit="https://github.com/avaloniaui/avaloniaedit"
         x:Class="BatIDE.Views.EditorWindow"
         Title="BatIDE — Editor"
-        Width="1200" Height="720"
+        Width="1280" Height="800"
         Background="#0d0d0d"
         Foreground="White"
         WindowStartupLocation="CenterScreen">
 
-    <Window.Styles>
-        <Style Selector="Button.toolbar">
-            <Setter Property="Background" Value="#1a1a1a" />
-            <Setter Property="Foreground" Value="#c8c8c8" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="BorderBrush" Value="#2a2a2a" />
-            <Setter Property="Padding" Value="12,6" />
-            <Setter Property="Margin" Value="2,0" />
-            <Setter Property="FontSize" Value="13" />
-            <Setter Property="Cursor" Value="Hand" />
-        </Style>
-        <Style Selector="Button.toolbar:pointerover /template/ ContentPresenter">
-            <Setter Property="Background" Value="#2a2a2a" />
-            <Setter Property="Foreground" Value="White" />
-        </Style>
-    </Window.Styles>
-
     <DockPanel>
+        <!-- Bottom: Output Panel -->
+        <Border DockPanel.Dock="Bottom" Height="180" Background="#0a0a0a" BorderBrush="#333" BorderThickness="0,1,0,0">
+            <DockPanel>
+                <Border DockPanel.Dock="Top" Background="#111" Padding="8,4">
+                    <DockPanel>
+                        <TextBlock Text="Output" Foreground="#888" FontSize="11" />
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="6">
+                            <Button x:Name="RunButton" Content="Run" Click="OnRunClick" Background="#1a3a1a" Foreground="#6f6" BorderThickness="1" BorderBrush="#2a4a2a" Padding="10,2" />
+                            <Button x:Name="StopButton" Content="Stop" Click="OnStopClick" Background="#3a1a1a" Foreground="#f66" BorderThickness="1" BorderBrush="#4a2a2a" Padding="10,2" IsEnabled="False" />
+                            <Button Content="Clear" Click="OnClearOutputClick" Background="#1a1a1a" Foreground="#ccc" BorderThickness="1" BorderBrush="#2a2a2a" Padding="10,2" />
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+                <TextBox x:Name="OutputText"
+                         Background="Transparent"
+                         Foreground="#0f0"
+                         FontFamily="Cascadia Code, Consolas, Menlo, monospace"
+                         FontSize="12"
+                         IsReadOnly="True"
+                         AcceptsReturn="True"
+                         TextWrapping="NoWrap"
+                         VerticalScrollBarVisibility="Auto"
+                         HorizontalScrollBarVisibility="Auto"
+                         BorderThickness="0" />
+            </DockPanel>
+        </Border>
+
+        <!-- Bottom: Status -->
         <Border DockPanel.Dock="Bottom" Background="#111111" Padding="6,4">
             <DockPanel>
-                <TextBlock x:Name="StatusText"
-                           DockPanel.Dock="Right"
-                           Foreground="#666"
-                           FontSize="11"
-                           VerticalAlignment="Center"
-                           Margin="12,0,0,0" />
+                <TextBlock x:Name="StatusText" DockPanel.Dock="Right" Foreground="#666" FontSize="11" VerticalAlignment="Center" Margin="12,0,0,0" />
                 <WrapPanel Orientation="Horizontal">
-                    <Button Classes="toolbar" Content="Save"         Click="OnSaveClick" />
-                    <Button Classes="toolbar" Content="Run"          Click="OnRunClick" />
-                    <Button Classes="toolbar" Content="File"         Click="OnFileMenuClick" />
-                    <Button Classes="toolbar" Content="Settings"     Click="OnSettingsClick" />
-                    <Button Classes="toolbar" Content="Documentation" Click="OnDocsClick" />
-                    <Button Classes="toolbar" Content="Find"         Click="OnFindClick" />
-                    <Button Classes="toolbar" Content="Comment"      Click="OnCommentClick" />
-                    <Button Classes="toolbar" Content="Undo"         Click="OnUndoClick" />
-                    <Button Classes="toolbar" Content="Redo"         Click="OnRedoClick" />
+                    <Button Content="Save" Click="OnSaveClick" />
+                    <Button Content="File" Click="OnFileMenuClick" />
+                    <Button Content="Find" Click="OnFindClick" />
+                    <Button Content="Comment" Click="OnCommentClick" />
+                    <Button Content="Undo" Click="OnUndoClick" />
+                    <Button Content="Redo" Click="OnRedoClick" />
                 </WrapPanel>
             </DockPanel>
         </Border>
 
+        <!-- Top: Project Info -->
         <Border DockPanel.Dock="Top" Background="#111111" Padding="10,6">
             <TextBlock x:Name="ProjectInfoText" Foreground="#999" FontSize="12" />
         </Border>
 
-                <Grid ColumnDefinitions="220, *, 240">
-            <!-- ЛІВА ПАНЕЛЬ: Document Outline -->
-            <Border Grid.Column="0" Background="#0a0a0a" BorderBrush="#222" BorderThickness="0,0,1,0">
-                <DockPanel>
-                    <TextBlock DockPanel.Dock="Top"
-                               Text="Document Outline"
-                               Foreground="#666"
-                               FontSize="11"
-                               Margin="10,8,10,4" />
-                    <TreeView x:Name="DocumentOutline"
-                              Background="Transparent"
-                              Foreground="#ddd"
-                              BorderThickness="0" />
-                </DockPanel>
-            </Border>
-
-            <!-- ЦЕНТР: Редактор -->
-            <Border Grid.Column="1" Background="Black">
-                <avalonedit:TextEditor x:Name="Editor"
-                                       Background="Transparent"
-                                       Foreground="#e0e0e0"
-                                       ShowLineNumbers="True"
-                                       FontFamily="Cascadia Code, Consolas, Menlo, monospace"
-                                       FontSize="14"
-                                       HorizontalScrollBarVisibility="Auto"
-                                       VerticalScrollBarVisibility="Auto" />
-            </Border>
-
-            <!-- ПРАВА ПАНЕЛЬ: Projects (залишаємо як було) -->
-            <Border Grid.Column="2" Background="#0a0a0a" BorderBrush="#222" BorderThickness="1,0,0,0">
-                <DockPanel>
-                    <TextBlock DockPanel.Dock="Top"
-                               Text="Projects"
-                               Foreground="#666"
-                               FontSize="11"
-                               Margin="10,8,10,4" />
-                    <ListBox x:Name="ProjectsList"
-                             Background="Transparent"
-                             Foreground="#ddd"
-                             BorderThickness="0" />
-                </DockPanel>
-            </Border>
-        </Grid>
-
+        <!-- Main: Tabs -->
+        <TabControl x:Name="Tabs" Background="Transparent" />
     </DockPanel>
 </Window>
