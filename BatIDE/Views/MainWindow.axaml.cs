@@ -32,6 +32,16 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         _settings = settings;
+
+        // Session restore: automatically open the last edited file if it exists.
+        Loaded += async (_, _) =>
+        {
+            var lastPath = _settings.Settings.LastPath;
+            if (!string.IsNullOrEmpty(lastPath) && File.Exists(lastPath))
+            {
+                await OpenEditorAsync(lastPath);
+            }
+        };
     }
 
     protected override void OnClosed(EventArgs e)

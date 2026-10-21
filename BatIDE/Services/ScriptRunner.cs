@@ -22,23 +22,61 @@ public static class ScriptRunner
 
         // --- Linux / macOS ---
         if (ext is ".bat" or ".cmd")
+        {
+            // Try auto-detecting Wine.
+            if (IsWineAvailable())
+            {
+                var psi = new ProcessStartInfo("wine")
+                {
+                    UseShellExecute = false
+                };
+                psi.ArgumentList.Add("cmd");
+                psi.ArgumentList.Add("/c");
+                psi.ArgumentList.Add(path);
+
+                using var proc = Process.Start(psi);
+                return;
+            }
+
             throw new InvalidOperationException(
                 $"{ext} files can only run on Windows.\n\n" +
                 "Options:\n" +
                 "  • Convert to .sh and run it here.\n" +
-                "  • Run via Wine:  wine cmd /c \"<file>\"\n" +
+                "  • Install Wine (BatIDE will detect it automatically next time).\n" +
                 "  • Execute on a Windows machine.");
+        }
 
         // .sh or no extension — try to execute with /bin/sh.
         // ArgumentList handles spaces/quotes in `path` safely.
-        var psi = new ProcessStartInfo
+        var shellPsi = new ProcessStartInfo
         {
             FileName = "/bin/sh",
             UseShellExecute = false
         };
-        psi.ArgumentList.Add(path);
+        shellPsi.ArgumentList.Add(path);
 
-        using var shellProc = Process.Start(psi);
+        using var shellProc = Process.Start(shellPsi);
+    }
+
+    private static bool IsWineAvailable()
+    {
+        try
+        {
+            using var proc = Process.Start(new ProcessStartInfo("which", "wine")
+            {
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            });
+            
+            proc?.WaitForExit(1000);
+            return proc?.ExitCode == 0;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     public static void OpenUrl(string url)

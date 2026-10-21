@@ -52,8 +52,24 @@
             <TextBlock x:Name="ProjectInfoText" Foreground="#999" FontSize="12" />
         </Border>
 
-        <Grid ColumnDefinitions="*,240">
-            <Border Grid.Column="0" Background="Black">
+                <Grid ColumnDefinitions="220, *, 240">
+            <!-- ЛІВА ПАНЕЛЬ: Document Outline -->
+            <Border Grid.Column="0" Background="#0a0a0a" BorderBrush="#222" BorderThickness="0,0,1,0">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top"
+                               Text="Document Outline"
+                               Foreground="#666"
+                               FontSize="11"
+                               Margin="10,8,10,4" />
+                    <TreeView x:Name="DocumentOutline"
+                              Background="Transparent"
+                              Foreground="#ddd"
+                              BorderThickness="0" />
+                </DockPanel>
+            </Border>
+
+            <!-- ЦЕНТР: Редактор -->
+            <Border Grid.Column="1" Background="Black">
                 <avalonedit:TextEditor x:Name="Editor"
                                        Background="Transparent"
                                        Foreground="#e0e0e0"
@@ -64,7 +80,8 @@
                                        VerticalScrollBarVisibility="Auto" />
             </Border>
 
-            <Border Grid.Column="1" Background="#0a0a0a" BorderBrush="#222" BorderThickness="1,0,0,0">
+            <!-- ПРАВА ПАНЕЛЬ: Projects (залишаємо як було) -->
+            <Border Grid.Column="2" Background="#0a0a0a" BorderBrush="#222" BorderThickness="1,0,0,0">
                 <DockPanel>
                     <TextBlock DockPanel.Dock="Top"
                                Text="Projects"

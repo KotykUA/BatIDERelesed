@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -13,6 +14,7 @@ using Avalonia.Platform.Storage;
 using AvaloniaEdit;
 using AvaloniaEdit.CodeCompletion;
 using AvaloniaEdit.Search;
+using BatIDE.Models;
 using BatIDE.Services;
 
 namespace BatIDE.Views;
@@ -32,11 +34,13 @@ public partial class EditorWindow : Window
     private readonly SettingsService _settings;
     private readonly List<string> _projectPaths = [];
     private readonly SearchPanel? _searchPanel;
+    private readonly BatDocumentService _documentService;
 
     private string _currentPath;
     private CompletionWindow? _completionWindow;
     private bool _allowClose;
     private bool _closeInProgress;
+    private BatDocument? _currentDocument; // Зберігаємо поточний AST
 
     private enum SaveChoice { Save, Discard, Cancel }
 
@@ -47,6 +51,12 @@ public partial class EditorWindow : Window
         InitializeComponent();
         _settings = settings;
         _currentPath = initialPath ?? string.Empty;
+
+        // --- Ініціалізація парсера (Частина 1) ---
+        _documentService = new BatDocumentService();
+        _documentService.DocumentParsed += OnDocumentParsed;
+        Editor.TextChanged += (_, _) => _documentService.TriggerParse(Editor.Text ?? string.Empty);
+        // -----------------------------------------
 
         // Wire up editor
         Editor.TextArea.TextEntered += OnEditorTextEntered;
@@ -75,8 +85,6 @@ public partial class EditorWindow : Window
 
     // ---------- Unsaved-changes state ----------
 
-    // AvaloniaEdit exposes "is the file dirty?" via UndoStack.IsOriginalFile:
-    // the stack is "original" if nothing has been recorded since the last ClearAll().
     private bool HasUnsavedChanges =>
         Editor.Document?.UndoStack.IsOriginalFile == false;
 
@@ -96,11 +104,8 @@ public partial class EditorWindow : Window
             return;
         }
 
-        // Do not let the window close until the user decides.
         e.Cancel = true;
 
-        // Guard against double-click on X / multiple OnClosing calls while a
-        // dialog is already in flight.
         if (_closeInProgress) return;
 
         _closeInProgress = true;
@@ -123,14 +128,12 @@ public partial class EditorWindow : Window
         }
         finally
         {
-            // Allow a retry if the dialog was cancelled or failed.
             _closeInProgress = false;
         }
     }
 
     // ---------- Public API used by MainWindow ----------
 
-    /// <summary>Load a new path into this window from an external caller.</summary>
     public async Task LoadProjectFromOutsideAsync(string path)
     {
         if (path == _currentPath) return;
@@ -151,12 +154,10 @@ public partial class EditorWindow : Window
         if (_projectPaths.Contains(path)) return;
         _projectPaths.Add(path);
 
-        // Keep the list bounded — old entries roll off the front.
         var limit = Math.Max(1, _settings.Settings.MaxRecentProjects);
         while (_projectPaths.Count > limit)
             _projectPaths.RemoveAt(0);
 
-        // Use display names in the list but keep full paths in _projectPaths.
         ProjectsList.ItemsSource = null;
         ProjectsList.ItemsSource = _projectPaths.Select(Path.GetFileName).ToList();
     }
@@ -173,9 +174,6 @@ public partial class EditorWindow : Window
 
             if (!await ConfirmDiscardChangesAsync())
             {
-                // Revert the ComboBox selection without re-entering this handler.
-                // Guard against -1 in case _currentPath is no longer in the list
-                // (e.g. it was trimmed by the limit above).
                 var revertIndex = _projectPaths.IndexOf(_currentPath);
                 if (revertIndex >= 0)
                 {
@@ -200,7 +198,9 @@ public partial class EditorWindow : Window
         try
         {
             Editor.Text = File.Exists(path) ? File.ReadAllText(path) : string.Empty;
-            Editor.Document?.UndoStack.ClearAll(); // resets IsOriginalFile to true
+            Editor.Document?.UndoStack.ClearAll();
+            
+            _documentService.TriggerParse(Editor.Text ?? string.Empty);
         }
         catch (Exception ex)
         {
@@ -211,7 +211,7 @@ public partial class EditorWindow : Window
         Title = $"BatIDE — {Path.GetFileName(path)}";
     }
 
-    // ---------- Save ----------
+    // ---------- Save & Save As ----------
 
     private void OnSaveClick(object? sender, RoutedEventArgs e) => SaveCurrentFile();
 
@@ -219,7 +219,7 @@ public partial class EditorWindow : Window
     {
         if (string.IsNullOrEmpty(_currentPath) || !File.Exists(_currentPath))
         {
-            ShowStatus("No file selected.");
+            ShowStatus("No file selected. Use Ctrl+Shift+S to save as...");
             return;
         }
 
@@ -227,13 +227,35 @@ public partial class EditorWindow : Window
         {
             var normalized = NormalizeLineEnding(Editor.Text ?? string.Empty, _currentPath);
             File.WriteAllText(_currentPath, normalized);
-            Editor.Document?.UndoStack.ClearAll(); // mark saved
+            Editor.Document?.UndoStack.ClearAll();
             ShowStatus("Saved.");
         }
         catch (Exception ex)
         {
             ShowStatus($"Save failed: {ex.Message}");
         }
+    }
+
+    private async Task SaveAsCurrentFileAsync()
+    {
+        var suggestedName = string.IsNullOrEmpty(_currentPath) ? "script.bat" : Path.GetFileName(_currentPath);
+        
+        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Save As...",
+            SuggestedFileName = suggestedName,
+            FileTypeChoices = [BatFilesType, ShFilesType]
+        });
+
+        if (file is null) return;
+
+        _currentPath = file.Path.LocalPath;
+        AddProject(_currentPath);
+        var idx = _projectPaths.IndexOf(_currentPath);
+        if (idx >= 0) ProjectsList.SelectedIndex = idx;
+        
+        SaveCurrentFile();
+        LoadProject(_currentPath);
     }
 
     private static string NormalizeLineEnding(string text, string path)
@@ -358,7 +380,6 @@ public partial class EditorWindow : Window
         }
     }
 
-    // IImageBrushSource — accept a Bitmap without a CS1503 conversion error.
     private void SetEditorBackground(IImageBrushSource? image)
     {
         if (image is null)
@@ -399,8 +420,6 @@ public partial class EditorWindow : Window
         var doc = Editor.Document;
         if (doc is null) return;
 
-        // Expand the selection to full lines so we don't inject "::"
-        // in the middle of a line (e.g. "echo foo" + selection "foo").
         var selStart = Editor.SelectionStart;
         var selEnd = selStart + Editor.SelectionLength;
         if (selEnd > doc.TextLength) selEnd = doc.TextLength;
@@ -416,7 +435,6 @@ public partial class EditorWindow : Window
         var ending = selected.Contains("\r\n") ? "\r\n" : "\n";
         var lines = selected.Replace("\r\n", "\n").Split('\n');
 
-        // Culture-invariant ordinal checks (Turkish-i trap, etc.).
         var trimmedFirst = lines[0].TrimStart();
         var isCommented =
             trimmedFirst.StartsWith("::", StringComparison.Ordinal) ||
@@ -430,7 +448,6 @@ public partial class EditorWindow : Window
                 : "::" + lines[i];
         }
 
-        // Explicit <string?> so the compiler picks a single overload (avoids CS0121).
         Editor.SelectedText = string.Join<string?>(ending, lines);
     }
 
@@ -441,8 +458,6 @@ public partial class EditorWindow : Window
 
     // ---------- Autocomplete ----------
 
-    // Characters that can appear inside a "word" for BAT purposes.
-    // Includes the sigils used by BAT/SH so `@echo`, `%var%`, `!var!`, `$var` work.
     private static bool IsWordChar(char ch) =>
         char.IsLetterOrDigit(ch) ||
         ch is '_' or '-' or '@' or '!' or '%' or '$' or '.';
@@ -480,15 +495,31 @@ public partial class EditorWindow : Window
         ShowCompletionWindow(wordStart, matches);
     }
 
+    // ---------- Keyboard Shortcuts (F12, Ctrl+S, etc.) ----------
+
     private void OnEditorKeyDown(object? sender, KeyEventArgs e)
     {
+        // F12 / Shift+F12
+        if (e.Key == Key.F12)
+        {
+            e.Handled = true;
+            if (e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+                FindReferences();
+            else
+                GoToDefinition();
+            return;
+        }
+
         if (!e.KeyModifiers.HasFlag(KeyModifiers.Control)) return;
 
         switch (e.Key)
         {
             case Key.S:
                 e.Handled = true;
-                SaveCurrentFile();
+                if (e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+                    _ = SaveAsCurrentFileAsync();
+                else
+                    SaveCurrentFile();
                 break;
             case Key.Space:
                 e.Handled = true;
@@ -501,9 +532,6 @@ public partial class EditorWindow : Window
 
     private void ShowCompletionAtCaret()
     {
-        // Close whatever popup is currently open. The Closed handler below
-        // checks ReferenceEquals, so this stale close will NOT clobber the
-        // new window we are about to assign to _completionWindow.
         _completionWindow?.Close();
         _completionWindow = null;
 
@@ -518,11 +546,6 @@ public partial class EditorWindow : Window
         ShowCompletionWindow(wordStart, BatCommands.All);
     }
 
-    /// <summary>
-    /// Create, populate, wire, and show a <see cref="CompletionWindow"/>.
-    /// The Closed handler is keyed on the specific instance so that a
-    /// late-arriving close of a previous popup cannot null out our field.
-    /// </summary>
     private void ShowCompletionWindow(int startOffset, IEnumerable<string> items)
     {
         var window = new CompletionWindow(Editor.TextArea) { StartOffset = startOffset };
@@ -538,6 +561,164 @@ public partial class EditorWindow : Window
 
         _completionWindow = window;
         window.Show();
+    }
+
+    // ---------- Document Parsing & Outline (Частина 1 + 2) ----------
+
+    private void OnDocumentParsed(BatDocument doc)
+    {
+        _currentDocument = doc;
+        UpdateDocumentOutline(doc);
+
+        var labelsCount = doc.Labels.Count;
+        var varsCount = doc.Variables.Count(v => v.IsDeclaration);
+        var cmdsCount = doc.Commands.Count;
+
+        ShowStatus($"Parsed: {labelsCount} labels | {varsCount} set vars | {cmdsCount} commands");
+    }
+
+    private void UpdateDocumentOutline(BatDocument doc)
+    {
+        var root = new TreeViewItem { Header = "📄 Document Outline", IsExpanded = true };
+
+        // 1. Labels
+        var labelsNode = new TreeViewItem { Header = "🏷️ Labels", IsExpanded = true };
+        foreach (var label in doc.Labels)
+        {
+            var item = new TreeViewItem { Header = label.Name, Tag = label.Offset };
+            item.DoubleTapped += OnOutlineItemDoubleTapped;
+            labelsNode.Items.Add(item);
+        }
+
+        // 2. Variables (тільки оголошення set)
+        var varsNode = new TreeViewItem { Header = "📦 Variables", IsExpanded = true };
+        var uniqueVars = doc.Variables.Where(v => v.IsDeclaration).GroupBy(v => v.Name).Select(g => g.First());
+        foreach (var v in uniqueVars)
+        {
+            var item = new TreeViewItem { Header = v.Name, Tag = Editor.Document?.GetLineByNumber(v.Line + 1)?.Offset ?? 0 };
+            item.DoubleTapped += OnOutlineItemDoubleTapped;
+            varsNode.Items.Add(item);
+        }
+
+        root.Items.Add(labelsNode);
+        root.Items.Add(varsNode);
+
+        DocumentOutline.ItemsSource = new[] { root };
+    }
+
+    private void OnOutlineItemDoubleTapped(object? sender, TappedEventArgs e)
+    {
+        if (sender is TreeViewItem { Tag: int offset })
+        {
+            Editor.CaretOffset = offset;
+            Editor.Focus();
+        }
+    }
+
+    // ---------- Go to Definition & Find References (Частина 2) ----------
+
+    private (string Name, bool IsLabel, int StartOffset)? GetSymbolUnderCaret()
+    {
+        var doc = Editor.Document;
+        if (doc == null) return null;
+        
+        var offset = Editor.CaretOffset;
+        var line = doc.GetLineByOffset(offset);
+        var text = doc.GetText(line);
+
+        // 1. Перевірка на goto/call :label
+        var labelMatch = Regex.Match(text, @"(?:goto|call)\s+:?([a-zA-Z0-9_\-]+)", RegexOptions.IgnoreCase);
+        if (labelMatch.Success)
+        {
+            var labelName = labelMatch.Groups[1].Value;
+            var labelStart = line.Offset + labelMatch.Groups[1].Index;
+            var labelEnd = labelStart + labelName.Length;
+
+            // Перевіряємо, чи курсор знаходиться на слові
+            if (offset >= labelStart - 1 && offset <= labelEnd + 1)
+                return (labelName, true, labelStart);
+        }
+
+        // 2. Перевірка на %var% або !var!
+        var varMatch = Regex.Match(text, @"[%!]([^%!\s]+)[%!]");
+        if (varMatch.Success)
+        {
+            var varName = varMatch.Groups[1].Value;
+            var varStart = line.Offset + varMatch.Groups[1].Index;
+            var varEnd = varStart + varName.Length;
+
+            if (offset >= varStart - 1 && offset <= varEnd + 1)
+                return (varName, false, varStart);
+        }
+
+        return null;
+    }
+
+    private void GoToDefinition()
+    {
+        if (_currentDocument == null) return;
+
+        var symbol = GetSymbolUnderCaret();
+        if (symbol == null)
+        {
+            ShowStatus("No symbol under cursor.");
+            return;
+        }
+
+        var (name, isLabel, _) = symbol.Value;
+
+        if (isLabel)
+        {
+            var target = _currentDocument.Labels.FirstOrDefault(l => l.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+            if (target != null)
+            {
+                Editor.CaretOffset = target.Offset;
+                ShowStatus($"Jumped to label :{name}");
+            }
+            else
+            {
+                ShowStatus($"Label :{name} not found in document.");
+            }
+        }
+        else
+        {
+            var target = _currentDocument.Variables.FirstOrDefault(v => v.IsDeclaration && v.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+            if (target != null)
+            {
+                var lineOffset = Editor.Document?.GetLineByNumber(target.Line + 1)?.Offset ?? 0;
+                Editor.CaretOffset = lineOffset;
+                ShowStatus($"Jumped to variable {name}");
+            }
+            else
+            {
+                ShowStatus($"Variable {name} is not declared in this document.");
+            }
+        }
+    }
+
+    private void FindReferences()
+    {
+        if (_currentDocument == null) return;
+
+        var symbol = GetSymbolUnderCaret();
+        if (symbol == null) return;
+
+        var (name, isLabel, _) = symbol.Value;
+        
+        if (isLabel)
+        {
+            var usages = _currentDocument.Commands
+                .Where(c => (c.Name == "GOTO" || c.Name == "CALL") && c.Arguments.Contains(name, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            ShowStatus($"Found {usages.Count} references to label :{name}.");
+        }
+        else
+        {
+            var usages = _currentDocument.Variables
+                .Where(v => !v.IsDeclaration && v.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            ShowStatus($"Found {usages.Count} references to variable {name}.");
+        }
     }
 
     // ---------- Safe wrapper for async event handlers ----------
