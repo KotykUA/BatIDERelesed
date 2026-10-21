@@ -7,7 +7,6 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
@@ -112,18 +111,11 @@ public partial class EditorWindow : Window
     {
         try
         {
-            var choice = await AskSaveChangesAsync();
-            switch (choice)
+            if (await ConfirmDiscardChangesAsync())
             {
-                case SaveChoice.Cancel:
-                    return;
-                case SaveChoice.Save:
-                    SaveCurrentFile();
-                    break;
+                _allowClose = true;
+                Close();
             }
-
-            _allowClose = true;
-            Close();
         }
         catch (Exception ex)
         {
@@ -143,18 +135,7 @@ public partial class EditorWindow : Window
     {
         if (path == _currentPath) return;
 
-        if (HasUnsavedChanges)
-        {
-            var choice = await AskSaveChangesAsync();
-            switch (choice)
-            {
-                case SaveChoice.Cancel:
-                    return;
-                case SaveChoice.Save:
-                    SaveCurrentFile();
-                    break;
-            }
-        }
+        if (!await ConfirmDiscardChangesAsync()) return;
 
         AddProject(path);
         _currentPath = path;
@@ -190,27 +171,19 @@ public partial class EditorWindow : Window
             var path = _projectPaths[index];
             if (path == _currentPath) return;
 
-            if (HasUnsavedChanges)
+            if (!await ConfirmDiscardChangesAsync())
             {
-                var choice = await AskSaveChangesAsync();
-                switch (choice)
+                // Revert the ComboBox selection without re-entering this handler.
+                // Guard against -1 in case _currentPath is no longer in the list
+                // (e.g. it was trimmed by the limit above).
+                var revertIndex = _projectPaths.IndexOf(_currentPath);
+                if (revertIndex >= 0)
                 {
-                    case SaveChoice.Cancel:
-                        // Revert the ComboBox selection without re-entering this handler.
-                        // Guard against -1 in case _currentPath is no longer in the list
-                        // (e.g. it was trimmed by the limit above).
-                        var revertIndex = _projectPaths.IndexOf(_currentPath);
-                        if (revertIndex >= 0)
-                        {
-                            ProjectsList.SelectionChanged -= OnProjectSelected;
-                            ProjectsList.SelectedIndex = revertIndex;
-                            ProjectsList.SelectionChanged += OnProjectSelected;
-                        }
-                        return;
-                    case SaveChoice.Save:
-                        SaveCurrentFile();
-                        break;
+                    ProjectsList.SelectionChanged -= OnProjectSelected;
+                    ProjectsList.SelectedIndex = revertIndex;
+                    ProjectsList.SelectionChanged += OnProjectSelected;
                 }
+                return;
             }
 
             _currentPath = path;
@@ -450,7 +423,7 @@ public partial class EditorWindow : Window
             trimmedFirst.StartsWith("//", StringComparison.Ordinal) ||
             trimmedFirst.StartsWith('#');
 
-        for (int i = 0; i < lines.Length; i++)
+        for (var i = 0; i < lines.Length; i++)
         {
             lines[i] = isCommented
                 ? lines[i].TrimStart(':', '/', '#', ' ')
@@ -521,6 +494,8 @@ public partial class EditorWindow : Window
                 e.Handled = true;
                 ShowCompletionAtCaret();
                 break;
+            default:
+                break;
         }
     }
 
@@ -575,6 +550,25 @@ public partial class EditorWindow : Window
 
     // ---------- Dialogs ----------
 
+    private async Task<bool> ConfirmDiscardChangesAsync()
+    {
+        if (!HasUnsavedChanges) return true;
+
+        var choice = await AskSaveChangesAsync();
+        switch (choice)
+        {
+            case SaveChoice.Cancel:
+                return false;
+            case SaveChoice.Save:
+                SaveCurrentFile();
+                break;
+            case SaveChoice.Discard:
+            default:
+                break;
+        }
+        return true;
+    }
+
     private async Task<SaveChoice> AskSaveChangesAsync()
     {
         var result = SaveChoice.Cancel;
@@ -586,7 +580,7 @@ public partial class EditorWindow : Window
             Height = 170,
             Background = new SolidColorBrush(Color.Parse("#0d0d0d")),
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            CanResize = false,
+            CanResize = false
         };
 
         dialog.Content = new StackPanel
@@ -603,8 +597,8 @@ public partial class EditorWindow : Window
                 },
                 new StackPanel
                 {
-                    Orientation = Orientation.Horizontal,
-                    HorizontalAlignment = HorizontalAlignment.Right,
+                    Orientation = Avalonia.Layout.Orientation.Horizontal,
+                    HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
                     Spacing = 8,
                     Children =
                     {
@@ -656,7 +650,7 @@ public partial class EditorWindow : Window
                     new Button
                     {
                         Content = "OK",
-                        HorizontalAlignment = HorizontalAlignment.Right,
+                        HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
                         Width = 80
                     }
                 }

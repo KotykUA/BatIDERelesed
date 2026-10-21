@@ -24,6 +24,7 @@ public partial class MainWindow : Window
     private readonly SettingsService _settings;
     private EditorWindow? _editor;
 
+    // ReSharper disable once UnusedMember.Global
     // Parameterless ctor kept for Avalonia's XAML factory.
     public MainWindow() : this(new SettingsService()) { }
 

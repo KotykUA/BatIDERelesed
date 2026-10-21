@@ -4,8 +4,13 @@ namespace BatIDE.Models;
 
 public class AppSettings
 {
+    // ReSharper disable once AutoPropertyCanBeMadeGetOnly.Global
+    // Must have a setter — values are mutated at runtime in RememberProject().
     public string? LastPath { get; set; }
+
+    // ReSharper disable once AutoPropertyCanBeMadeGetOnly.Global
     public string? LastName { get; set; }
+
     public List<string> RecentProjects { get; set; } = [];
 
     /// <summary>

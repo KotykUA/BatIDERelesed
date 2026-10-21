@@ -6,6 +6,8 @@ using BatIDE.Views;
 
 namespace BatIDE;
 
+// ReSharper disable once PartialTypeWithSinglePart
+// Must be partial — Avalonia's XAML compiler generates the other half.
 public partial class App : Application
 {
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
