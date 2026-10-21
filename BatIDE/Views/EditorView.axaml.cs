@@ -12,6 +12,7 @@ using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using AvaloniaEdit;
 using AvaloniaEdit.CodeCompletion;
+using AvaloniaEdit.Document;
 using AvaloniaEdit.Folding;
 using AvaloniaEdit.Rendering;
 using AvaloniaEdit.Search;
@@ -58,12 +59,12 @@ public partial class EditorView : UserControl
         _documentService.DocumentParsed += OnDocumentParsed;
         Editor.TextChanged += (_, _) => _documentService.TriggerParse(Editor.Text ?? string.Empty);
 
-        // --- Частина 3: Diagnostics ---
+        // Diagnostics
         _diagnosticRenderer = new DiagnosticRenderer(Editor.TextArea.TextView);
         Editor.TextArea.TextView.BackgroundRenderers.Add(_diagnosticRenderer);
         ProblemsList.DoubleTapped += OnProblemDoubleTapped;
 
-        // --- Частина 5: Folding ---
+        // Folding
         _foldingManager = FoldingManager.Install(Editor.TextArea);
         _foldingStrategy = new BatFoldingStrategy();
         Editor.TextChanged += (_, _) => UpdateFoldings();
@@ -123,7 +124,13 @@ public partial class EditorView : UserControl
         if (window == null) return true;
 
         var result = SaveChoice.Cancel;
-        var dialog = new Window { Title = "Unsaved changes", Width = 420, Height = 170, Background = new SolidColorBrush(Color.Parse("#0d0d0d")), WindowStartupLocation = WindowStartupLocation.CenterOwner, CanResize = false };
+        var dialog = new Window
+        {
+            Title = "Unsaved changes", Width = 420, Height = 170,
+            Background = new SolidColorBrush(Color.Parse("#0d0d0d")),
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            CanResize = false
+        };
         dialog.Content = new StackPanel
         {
             Margin = new Thickness(20), Spacing = 16,
@@ -132,8 +139,15 @@ public partial class EditorView : UserControl
                 new TextBlock { Text = $"Save changes to {DisplayName}?", Foreground = Brushes.White, TextWrapping = TextWrapping.Wrap },
                 new StackPanel
                 {
-                    Orientation = Avalonia.Layout.Orientation.Horizontal, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right, Spacing = 8,
-                    Children = { MakeButton("Save", SaveChoice.Save), MakeButton("Discard", SaveChoice.Discard), MakeButton("Cancel", SaveChoice.Cancel) }
+                    Orientation = Avalonia.Layout.Orientation.Horizontal,
+                    HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
+                    Spacing = 8,
+                    Children =
+                    {
+                        MakeButton("Save", SaveChoice.Save),
+                        MakeButton("Discard", SaveChoice.Discard),
+                        MakeButton("Cancel", SaveChoice.Cancel)
+                    }
                 }
             }
         };
@@ -221,14 +235,10 @@ public partial class EditorView : UserControl
 
     private void OnEditorKeyDown(object? sender, KeyEventArgs e)
     {
-        // --- Частина 5: Snippets (Tab) ---
-        if (e.Key == Key.Tab)
+        if (e.Key == Key.Tab && TryExpandSnippet())
         {
-            if (TryExpandSnippet())
-            {
-                e.Handled = true;
-                return;
-            }
+            e.Handled = true;
+            return;
         }
 
         if (e.Key == Key.F12)
@@ -267,7 +277,6 @@ public partial class EditorView : UserControl
 
         doc.Replace(wordStart, offset - wordStart, expansion);
 
-        // Ставимо курсор всередині дужок (перший \n)
         var firstNewLine = expansion.IndexOf('\n');
         if (firstNewLine >= 0)
             Editor.CaretOffset = wordStart + firstNewLine + 1;
@@ -392,7 +401,11 @@ public partial class EditorView : UserControl
         else
         {
             var target = _currentDocument.Variables.FirstOrDefault(v => v.IsDeclaration && v.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
-            if (target != null) { Editor.CaretOffset = Editor.Document?.GetLineByNumber(target.Line + 1)?.Offset ?? 0; StatusChanged?.Invoke($"Jumped to {name}"); }
+            if (target != null)
+            {
+                Editor.CaretOffset = Editor.Document?.GetLineByNumber(target.Line + 1)?.Offset ?? 0;
+                StatusChanged?.Invoke($"Jumped to {name}");
+            }
             else StatusChanged?.Invoke($"Variable {name} not declared.");
         }
     }
@@ -415,7 +428,7 @@ public partial class EditorView : UserControl
 public class DiagnosticRenderer : IBackgroundRenderer
 {
     private readonly TextView _textView;
-    private List<Diagnostic> _diagnostics = new();
+    private List<Diagnostic> _diagnostics = [];
 
     public DiagnosticRenderer(TextView textView) => _textView = textView;
     public KnownLayer Layer => KnownLayer.Background;
@@ -432,7 +445,16 @@ public class DiagnosticRenderer : IBackgroundRenderer
             {
                 var line = textView.Document.GetLineByNumber(diag.Line + 1);
                 if (line == null) continue;
-                foreach (var rect in BackgroundGeometryBuilder.GetRectsForSegment(textView, new SimpleSegment(line.Offset, line.Length)))
+
+                // Замість SimpleSegment (який більше не існує в AvaloniaEdit 11.3)
+                // використовуємо TextSegment напряму.
+                var segment = new TextSegment
+                {
+                    StartOffset = line.Offset,
+                    Length = line.Length
+                };
+
+                foreach (var rect in BackgroundGeometryBuilder.GetRectsForSegment(textView, segment))
                 {
                     context.BeginFigure(rect.BottomLeft, false);
                     for (double x = rect.BottomLeft.X; x < rect.BottomRight.X; x += 4)
