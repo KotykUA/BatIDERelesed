@@ -6,18 +6,25 @@ using AvaloniaEdit.Folding;
 
 namespace BatIDE.Services;
 
-public class BatFoldingStrategy
+/// <summary>
+/// Pure-static folding strategy for BAT scripts. Detects <c>:: #region</c>
+/// blocks and matched parentheses across multiple lines.
+/// </summary>
+public static partial class BatFoldingStrategy
 {
-    private static readonly Regex RegionStartRegex = new(@"^\s*::\s*#region(.*)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-    private static readonly Regex RegionEndRegex = new(@"^\s*::\s*#endregion", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    [GeneratedRegex(@"^\s*::\s*#region(.*)", RegexOptions.IgnoreCase)]
+    private static partial Regex RegionStartRegex();
 
-    public void UpdateFoldings(FoldingManager manager, TextDocument document)
+    [GeneratedRegex(@"^\s*::\s*#endregion", RegexOptions.IgnoreCase)]
+    private static partial Regex RegionEndRegex();
+
+    public static void UpdateFoldings(FoldingManager manager, TextDocument document)
     {
         var foldings = CreateNewFoldings(document, out var firstErrorOffset);
         manager.UpdateFoldings(foldings, firstErrorOffset);
     }
 
-    private static IEnumerable<NewFolding> CreateNewFoldings(TextDocument document, out int firstErrorOffset)
+    private static List<NewFolding> CreateNewFoldings(TextDocument document, out int firstErrorOffset)
     {
         firstErrorOffset = -1;
         var foldings = new List<NewFolding>();
@@ -30,14 +37,14 @@ public class BatFoldingStrategy
         {
             var line = lines[i];
 
-            var regionMatch = RegionStartRegex.Match(line);
+            var regionMatch = RegionStartRegex().Match(line);
             if (regionMatch.Success)
             {
                 regionStack.Push((i, regionMatch.Groups[1].Value.Trim()));
                 continue;
             }
 
-            if (RegionEndRegex.IsMatch(line) && regionStack.Count > 0)
+            if (RegionEndRegex().IsMatch(line) && regionStack.Count > 0)
             {
                 var (startLine, name) = regionStack.Pop();
                 var startOffset = document.GetLineByNumber(startLine + 1).Offset;

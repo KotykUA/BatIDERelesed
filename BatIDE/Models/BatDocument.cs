@@ -5,9 +5,9 @@ namespace BatIDE.Models;
 public class BatDocument
 {
     public string Text { get; init; } = string.Empty;
-    public List<BatLabel> Labels { get; init; } = [];
-    public List<BatVariable> Variables { get; init; } = [];
-    public List<BatCommand> Commands { get; init; } = [];
+    public List<BatLabel> Labels { get; } = [];
+    public List<BatVariable> Variables { get; } = [];
+    public List<BatCommand> Commands { get; } = [];
 }
 
 public class BatLabel

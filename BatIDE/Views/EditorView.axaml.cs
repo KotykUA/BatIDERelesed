@@ -20,18 +20,18 @@ using BatIDE.Services;
 
 namespace BatIDE.Views;
 
-public partial class EditorView : UserControl
+public partial class EditorView : UserControl, IDisposable
 {
     private readonly SettingsService _settings;
     private readonly List<string> _projectPaths = [];
     private readonly BatDocumentService _documentService;
     private readonly DiagnosticRenderer _diagnosticRenderer;
     private readonly FoldingManager _foldingManager;
-    private readonly BatFoldingStrategy _foldingStrategy;
 
     private string _currentPath = string.Empty;
     private CompletionWindow? _completionWindow;
     private BatDocument? _currentDocument;
+    private bool _disposed;
 
     private enum SaveChoice { Save, Discard, Cancel }
 
@@ -51,15 +51,13 @@ public partial class EditorView : UserControl
 
         _documentService = new BatDocumentService();
         _documentService.DocumentParsed += OnDocumentParsed;
-        Editor.TextChanged += (_, _) => _documentService.TriggerParse(Editor.Text ?? string.Empty);
+        Editor.TextChanged += OnEditorTextChanged;
 
         _diagnosticRenderer = new DiagnosticRenderer(Editor.TextArea.TextView);
         Editor.TextArea.TextView.BackgroundRenderers.Add(_diagnosticRenderer);
         ProblemsList.DoubleTapped += OnProblemDoubleTapped;
 
         _foldingManager = FoldingManager.Install(Editor.TextArea);
-        _foldingStrategy = new BatFoldingStrategy();
-        Editor.TextChanged += (_, _) => UpdateFoldings();
 
         Editor.TextArea.TextEntered += OnEditorTextEntered;
         Editor.TextArea.KeyDown += OnEditorKeyDown;
@@ -70,11 +68,39 @@ public partial class EditorView : UserControl
         foreach (var p in _settings.Settings.RecentProjects) AddProject(p);
     }
 
+    // ---------- IDisposable ----------
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        // Release the debounced parser + its CancellationTokenSource.
+        _documentService.DocumentParsed -= OnDocumentParsed;
+        _documentService.Dispose();
+
+        // Detach editor / UI events so late signals don't hit a dead view.
+        Editor.TextChanged -= OnEditorTextChanged;
+        Editor.TextArea.TextEntered -= OnEditorTextEntered;
+        Editor.TextArea.KeyDown -= OnEditorKeyDown;
+        ProblemsList.DoubleTapped -= OnProblemDoubleTapped;
+        ProjectsList.SelectionChanged -= OnProjectSelected;
+    }
+
+    private void OnEditorTextChanged(object? sender, EventArgs e)
+    {
+        if (_disposed) return;
+        _documentService.TriggerParse(Editor.Text ?? string.Empty);
+        UpdateFoldings();
+    }
+
     public void UpdateFoldings()
     {
-        if (Editor.Document == null) return;
-        _foldingStrategy.UpdateFoldings(_foldingManager, Editor.Document);
+        if (_disposed || Editor.Document == null) return;
+        BatFoldingStrategy.UpdateFoldings(_foldingManager, Editor.Document);
     }
+
+    // ---------- File loading / saving ----------
 
     public async Task LoadFileAsync(string path)
     {
@@ -174,6 +200,8 @@ public partial class EditorView : UserControl
         return text.Replace("\r\n", "\n").Replace("\r", "\n").Replace("\n", ending);
     }
 
+    // ---------- Project list ----------
+
     private void AddProject(string path)
     {
         if (_projectPaths.Contains(path)) return;
@@ -217,12 +245,14 @@ public partial class EditorView : UserControl
         }
     }
 
+    // ---------- Autocomplete & snippets ----------
+
     private static bool IsWordChar(char ch) =>
         char.IsLetterOrDigit(ch) || ch is '_' or '-' or '@' or '!' or '%' or '$' or '.';
 
     private void OnEditorTextEntered(object? sender, TextInputEventArgs e)
     {
-        if (e.Text is null || e.Text.Length == 0 || _completionWindow != null) return;
+        if (_disposed || e.Text is null || e.Text.Length == 0 || _completionWindow != null) return;
         if (!IsWordChar(e.Text[0])) return;
 
         var offset = Editor.CaretOffset;
@@ -247,6 +277,8 @@ public partial class EditorView : UserControl
 
     private void OnEditorKeyDown(object? sender, KeyEventArgs e)
     {
+        if (_disposed) return;
+
         if (e.Key == Key.Tab && TryExpandSnippet())
         {
             e.Handled = true;
@@ -328,8 +360,12 @@ public partial class EditorView : UserControl
         window.Show();
     }
 
+    // ---------- Document parsing ----------
+
     private void OnDocumentParsed(BatDocument doc)
     {
+        if (_disposed) return;
+
         _currentDocument = doc;
         UpdateDocumentOutline(doc);
 
@@ -396,6 +432,8 @@ public partial class EditorView : UserControl
             }
         }
     }
+
+    // ---------- Go to Definition / Find References ----------
 
     private (string Name, bool IsLabel, int StartOffset)? GetSymbolUnderCaret()
     {
@@ -477,19 +515,22 @@ public partial class EditorView : UserControl
     }
 }
 
-// ---------- Squiggly Renderer ----------
+// ---------- Squiggly renderer ----------
 
-public sealed class DiagnosticRenderer(TextView textView) : IBackgroundRenderer
+public sealed class DiagnosticRenderer : IBackgroundRenderer
 {
+    private readonly TextView _textView;
     private List<Diagnostic> _diagnostics = [];
+
+    public DiagnosticRenderer(TextView textView) => _textView = textView;
 
     public KnownLayer Layer => KnownLayer.Background;
 
     public void SetDiagnostics(List<Diagnostic> diagnostics) => _diagnostics = diagnostics;
 
-    public void Draw(TextView view, DrawingContext drawingContext)
+    public void Draw(TextView textView, DrawingContext drawingContext)
     {
-        if (_diagnostics.Count == 0 || !view.VisualLinesValid) return;
+        if (_diagnostics.Count == 0 || !textView.VisualLinesValid) return;
 
         var pen = new Pen(new SolidColorBrush(Color.Parse("#d16969")), 1.5);
         var geometry = new StreamGeometry();
@@ -498,7 +539,7 @@ public sealed class DiagnosticRenderer(TextView textView) : IBackgroundRenderer
         {
             foreach (var diag in _diagnostics)
             {
-                var line = textView.Document.GetLineByNumber(diag.Line + 1);
+                var line = _textView.Document.GetLineByNumber(diag.Line + 1);
                 if (line == null) continue;
 
                 var segment = new TextSegment
@@ -507,7 +548,7 @@ public sealed class DiagnosticRenderer(TextView textView) : IBackgroundRenderer
                     Length = line.Length
                 };
 
-                foreach (var rect in BackgroundGeometryBuilder.GetRectsForSegment(view, segment))
+                foreach (var rect in BackgroundGeometryBuilder.GetRectsForSegment(textView, segment))
                 {
                     context.BeginFigure(rect.BottomLeft, false);
                     for (double x = rect.BottomLeft.X; x < rect.BottomRight.X; x += 4)

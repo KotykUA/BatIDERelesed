@@ -42,7 +42,20 @@ public partial class EditorWindow : Window
         };
 
         Tabs.SelectionChanged += (_, _) => UpdateProjectInfo();
-        Closed += (_, _) => _settings.Flush();
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        // Flush pending debounced writes and dispose each editor view
+        // (which owns a BatDocumentService with a CancellationTokenSource).
+        foreach (var view in _views)
+        {
+            view.Dispose();
+        }
+        _views.Clear();
+
+        _settings.Flush();
+        base.OnClosed(e);
     }
 
     public async Task OpenFileInTabAsync(string path)
