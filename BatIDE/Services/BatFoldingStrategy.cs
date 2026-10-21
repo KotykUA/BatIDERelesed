@@ -9,16 +9,22 @@ namespace BatIDE.Services;
 /// <summary>
 /// Стратегія згортання блоків для BAT. Шукає пари дужок ( ) та регіони :: #region.
 /// </summary>
-public class BatFoldingStrategy : AbstractFoldingStrategy
+public class BatFoldingStrategy
 {
     private static readonly Regex RegionStartRegex = new(@"^\s*::\s*#region(.*)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex RegionEndRegex = new(@"^\s*::\s*#endregion", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
-    public override IEnumerable<NewFolding> CreateNewFoldings(TextDocument document, out int firstErrorOffset)
+    public void UpdateFoldings(FoldingManager manager, TextDocument document)
+    {
+        var foldings = CreateNewFoldings(document, out var firstErrorOffset);
+        manager.UpdateFoldings(foldings, firstErrorOffset);
+    }
+
+    public IEnumerable<NewFolding> CreateNewFoldings(TextDocument document, out int firstErrorOffset)
     {
         firstErrorOffset = -1;
         var foldings = new List<NewFolding>();
-        
+
         var lines = document.Text.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
         var regionStack = new Stack<(int StartLine, string Name)>();
         var parenStack = new Stack<int>();
@@ -26,9 +32,8 @@ public class BatFoldingStrategy : AbstractFoldingStrategy
         for (int i = 0; i < lines.Length; i++)
         {
             var line = lines[i];
-            var trimmed = line.Trim();
 
-            // 1. Регіони
+            // 1. Регіони :: #region / :: #endregion
             var regionMatch = RegionStartRegex.Match(line);
             if (regionMatch.Success)
             {

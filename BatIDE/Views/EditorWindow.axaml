@@ -8,16 +8,43 @@
         WindowStartupLocation="CenterScreen">
 
     <DockPanel>
-        <!-- Bottom: Output Panel -->
-        <Border DockPanel.Dock="Bottom" Height="180" Background="#0a0a0a" BorderBrush="#333" BorderThickness="0,1,0,0">
+        <!-- Нижня панель: Output -->
+        <Border DockPanel.Dock="Bottom"
+                Height="180"
+                Background="#0a0a0a"
+                BorderBrush="#333"
+                BorderThickness="0,1,0,0">
             <DockPanel>
                 <Border DockPanel.Dock="Top" Background="#111" Padding="8,4">
                     <DockPanel>
-                        <TextBlock Text="Output" Foreground="#888" FontSize="11" />
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="6">
-                            <Button x:Name="RunButton" Content="Run" Click="OnRunClick" Background="#1a3a1a" Foreground="#6f6" BorderThickness="1" BorderBrush="#2a4a2a" Padding="10,2" />
-                            <Button x:Name="StopButton" Content="Stop" Click="OnStopClick" Background="#3a1a1a" Foreground="#f66" BorderThickness="1" BorderBrush="#4a2a2a" Padding="10,2" IsEnabled="False" />
-                            <Button Content="Clear" Click="OnClearOutputClick" Background="#1a1a1a" Foreground="#ccc" BorderThickness="1" BorderBrush="#2a2a2a" Padding="10,2" />
+                        <TextBlock Text="Output" Foreground="#888" FontSize="11" VerticalAlignment="Center" />
+                        <StackPanel Orientation="Horizontal"
+                                    HorizontalAlignment="Right"
+                                    Spacing="6">
+                            <Button x:Name="RunButton"
+                                    Content="Run"
+                                    Click="OnRunClick"
+                                    Background="#1a3a1a"
+                                    Foreground="#6f6"
+                                    BorderThickness="1"
+                                    BorderBrush="#2a4a2a"
+                                    Padding="10,2" />
+                            <Button x:Name="StopButton"
+                                    Content="Stop"
+                                    Click="OnStopClick"
+                                    Background="#3a1a1a"
+                                    Foreground="#f66"
+                                    BorderThickness="1"
+                                    BorderBrush="#4a2a2a"
+                                    Padding="10,2"
+                                    IsEnabled="False" />
+                            <Button Content="Clear"
+                                    Click="OnClearOutputClick"
+                                    Background="#1a1a1a"
+                                    Foreground="#ccc"
+                                    BorderThickness="1"
+                                    BorderBrush="#2a2a2a"
+                                    Padding="10,2" />
                         </StackPanel>
                     </DockPanel>
                 </Border>
@@ -35,10 +62,15 @@
             </DockPanel>
         </Border>
 
-        <!-- Bottom: Status -->
+        <!-- Статус-бар -->
         <Border DockPanel.Dock="Bottom" Background="#111111" Padding="6,4">
             <DockPanel>
-                <TextBlock x:Name="StatusText" DockPanel.Dock="Right" Foreground="#666" FontSize="11" VerticalAlignment="Center" Margin="12,0,0,0" />
+                <TextBlock x:Name="StatusText"
+                           DockPanel.Dock="Right"
+                           Foreground="#666"
+                           FontSize="11"
+                           VerticalAlignment="Center"
+                           Margin="12,0,0,0" />
                 <WrapPanel Orientation="Horizontal">
                     <Button Content="Save" Click="OnSaveClick" />
                     <Button Content="File" Click="OnFileMenuClick" />
@@ -50,12 +82,12 @@
             </DockPanel>
         </Border>
 
-        <!-- Top: Project Info -->
+        <!-- Верхня панель: шлях до файлу -->
         <Border DockPanel.Dock="Top" Background="#111111" Padding="10,6">
             <TextBlock x:Name="ProjectInfoText" Foreground="#999" FontSize="12" />
         </Border>
 
-        <!-- Main: Tabs -->
+        <!-- Вкладки -->
         <TabControl x:Name="Tabs" Background="Transparent" />
     </DockPanel>
 </Window>
